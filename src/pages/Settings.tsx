@@ -12,7 +12,6 @@ import { Loader2, Copy, Check } from "lucide-react";
 const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string>("");
-  const [showWebhook, setShowWebhook] = useState(false);
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [syncingCustomers, setSyncingCustomers] = useState(false);
   const [syncingOrders, setSyncingOrders] = useState(false);
@@ -56,7 +55,6 @@ const Settings = () => {
       toast.error("Failed to save settings");
     } else {
       toast.success("Settings saved successfully!");
-      setShowWebhook(true);
     }
     setLoading(false);
   };
@@ -193,6 +191,65 @@ const Settings = () => {
                 placeholder="923288981133"
               />
             </div>
+            
+            <Separator className="my-4" />
+            
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold mb-2">📡 Webhook Configuration</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Copy these values to Meta Business Suite → WhatsApp → Configuration → Webhook
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-xs">Callback URL</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    value={webhookUrl} 
+                    readOnly 
+                    className="font-mono text-xs bg-muted/50" 
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => copyToClipboard(webhookUrl, "url")}
+                  >
+                    {copied === "url" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-xs">Verify Token</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    value={verifyToken} 
+                    readOnly 
+                    className="font-mono text-xs bg-muted/50" 
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => copyToClipboard(verifyToken, "token")}
+                  >
+                    {copied === "token" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg text-xs space-y-1">
+                <p className="font-medium text-primary">⚠️ Important Steps:</p>
+                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                  <li>Copy the Callback URL and Verify Token above</li>
+                  <li>Go to Meta Business Suite → WhatsApp → Configuration</li>
+                  <li>Click "Edit" on Webhook section</li>
+                  <li>Paste both values and click "Verify and Save"</li>
+                  <li>Meta will immediately verify the webhook</li>
+                  <li>Subscribe to "messages" webhook field</li>
+                </ol>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -311,44 +368,6 @@ const Settings = () => {
           )}
         </div>
 
-        {showWebhook && (
-          <Card className="border-primary">
-            <CardHeader>
-              <CardTitle className="text-primary">WhatsApp Webhook Configuration</CardTitle>
-              <CardDescription>
-                Copy these values and paste them in Meta Business Suite → WhatsApp → Configuration → Webhook
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Webhook Callback URL</Label>
-                <div className="flex gap-2">
-                  <Input value={webhookUrl} readOnly className="font-mono text-sm" />
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => copyToClipboard(webhookUrl, "url")}
-                  >
-                    {copied === "url" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Verify Token</Label>
-                <div className="flex gap-2">
-                  <Input value={verifyToken} readOnly className="font-mono text-sm" />
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => copyToClipboard(verifyToken, "token")}
-                  >
-                    {copied === "token" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </Layout>
   );
