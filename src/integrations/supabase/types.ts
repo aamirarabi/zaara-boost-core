@@ -92,7 +92,9 @@ export type Database = {
           customer_name: string | null
           customer_type: string | null
           email: string | null
+          first_name: string | null
           last_interaction_at: string | null
+          last_name: string | null
           last_order_date: string | null
           last_products_viewed: string[] | null
           order_count: number | null
@@ -100,6 +102,7 @@ export type Database = {
           preferences: Json | null
           shopify_customer_id: string | null
           tags: string[] | null
+          total_orders: number | null
           total_spend: number | null
           updated_at: string | null
         }
@@ -108,7 +111,9 @@ export type Database = {
           customer_name?: string | null
           customer_type?: string | null
           email?: string | null
+          first_name?: string | null
           last_interaction_at?: string | null
+          last_name?: string | null
           last_order_date?: string | null
           last_products_viewed?: string[] | null
           order_count?: number | null
@@ -116,6 +121,7 @@ export type Database = {
           preferences?: Json | null
           shopify_customer_id?: string | null
           tags?: string[] | null
+          total_orders?: number | null
           total_spend?: number | null
           updated_at?: string | null
         }
@@ -124,7 +130,9 @@ export type Database = {
           customer_name?: string | null
           customer_type?: string | null
           email?: string | null
+          first_name?: string | null
           last_interaction_at?: string | null
+          last_name?: string | null
           last_order_date?: string | null
           last_products_viewed?: string[] | null
           order_count?: number | null
@@ -132,6 +140,7 @@ export type Database = {
           preferences?: Json | null
           shopify_customer_id?: string | null
           tags?: string[] | null
+          total_orders?: number | null
           total_spend?: number | null
           updated_at?: string | null
         }
@@ -258,6 +267,7 @@ export type Database = {
           created_at: string | null
           currency: string | null
           customer_email: string | null
+          customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
           financial_status: string | null
@@ -283,6 +293,7 @@ export type Database = {
           created_at?: string | null
           currency?: string | null
           customer_email?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           financial_status?: string | null
@@ -308,6 +319,7 @@ export type Database = {
           created_at?: string | null
           currency?: string | null
           customer_email?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           financial_status?: string | null
@@ -327,7 +339,15 @@ export type Database = {
           tracking_url?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shopify_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["phone_number"]
+          },
+        ]
       }
       shopify_products: {
         Row: {

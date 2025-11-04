@@ -13,6 +13,9 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string>("");
   const [showWebhook, setShowWebhook] = useState(false);
+  const [syncingProducts, setSyncingProducts] = useState(false);
+  const [syncingCustomers, setSyncingCustomers] = useState(false);
+  const [syncingOrders, setSyncingOrders] = useState(false);
   const [settings, setSettings] = useState({
     whatsapp_phone_id: "",
     whatsapp_access_token: "",
@@ -65,6 +68,57 @@ const Settings = () => {
     setCopied(field);
     toast.success("Copied to clipboard!");
     setTimeout(() => setCopied(""), 2000);
+  };
+
+  const syncProducts = async () => {
+    setSyncingProducts(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-products');
+      if (error) {
+        toast.error(error.message || "Failed to sync products");
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(`✅ ${data.message} in ${data.duration}`);
+      }
+    } catch (error) {
+      toast.error("Error syncing products");
+    }
+    setSyncingProducts(false);
+  };
+
+  const syncCustomers = async () => {
+    setSyncingCustomers(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-customers');
+      if (error) {
+        toast.error(error.message || "Failed to sync customers");
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(`✅ ${data.message} in ${data.duration}`);
+      }
+    } catch (error) {
+      toast.error("Error syncing customers");
+    }
+    setSyncingCustomers(false);
+  };
+
+  const syncOrders = async () => {
+    setSyncingOrders(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-orders');
+      if (error) {
+        toast.error(error.message || "Failed to sync orders");
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(`✅ ${data.message} in ${data.duration}`);
+      }
+    } catch (error) {
+      toast.error("Error syncing orders");
+    }
+    setSyncingOrders(false);
   };
 
   return (
@@ -168,16 +222,53 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        <Button onClick={handleSave} disabled={loading} className="w-full">
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            "Save All Settings"
-          )}
-        </Button>
+        <div className="space-y-3">
+          <Button onClick={handleSave} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save All Settings"
+            )}
+          </Button>
+          
+          <div className="grid grid-cols-3 gap-3">
+            <Button onClick={syncProducts} disabled={syncingProducts} variant="outline">
+              {syncingProducts ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                "Sync Products"
+              )}
+            </Button>
+            
+            <Button onClick={syncCustomers} disabled={syncingCustomers} variant="outline">
+              {syncingCustomers ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                "Sync Customers"
+              )}
+            </Button>
+            
+            <Button onClick={syncOrders} disabled={syncingOrders} variant="outline">
+              {syncingOrders ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                "Sync Orders"
+              )}
+            </Button>
+          </div>
+        </div>
 
         {showWebhook && (
           <Card className="border-primary">
