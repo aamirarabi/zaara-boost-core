@@ -24,61 +24,22 @@ const Products = () => {
 
   const syncProducts = async () => {
     setSyncing(true);
-    const { data: settings } = await supabase.from("system_settings").select("*");
     
-    const storeUrl = settings?.find((s) => s.setting_key === "shopify_store_url")?.setting_value;
-    const token = settings?.find((s) => s.setting_key === "shopify_access_token")?.setting_value;
-
-    if (!storeUrl || !token) {
-      toast.error("Please configure Shopify credentials in Settings");
-      setSyncing(false);
-      return;
-    }
-
     try {
-      let allProducts: any[] = [];
-      let url = `https://${storeUrl}/admin/api/2024-10/products.json?limit=250`;
-
-      while (url) {
-        const res = await fetch(url, { headers: { "X-Shopify-Access-Token": token } });
-        const data = await res.json();
-        
-        if (data.products) {
-          allProducts.push(...data.products);
-        }
-
-        const linkHeader = res.headers.get("Link");
-        url = linkHeader?.includes('rel="next"') ? linkHeader.match(/<(.+?)>; rel="next"/)?.[1] || null : null;
-      }
-
-      const productsToUpsert = allProducts.map((p) => ({
-        product_id: p.id.toString(),
-        shopify_id: p.id.toString(),
-        title: p.title,
-        description: p.body_html,
-        vendor: p.vendor,
-        product_type: p.product_type,
-        handle: p.handle,
-        status: p.status,
-        tags: p.tags?.split(",").map((t: string) => t.trim()) || [],
-        images: JSON.stringify(p.images?.map((img: any) => img.src) || []),
-        variants: JSON.stringify(p.variants || []),
-        price: parseFloat(p.variants[0]?.price || "0"),
-        inventory: p.variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0),
-        synced_at: new Date().toISOString(),
-      }));
-
-      const { error } = await supabase.from("shopify_products").upsert(productsToUpsert);
+      const { data, error } = await supabase.functions.invoke('sync-shopify-products');
 
       if (error) {
-        toast.error("Failed to sync products");
+        toast.error(error.message || "Failed to sync products");
+      } else if (data?.error) {
+        toast.error(data.error);
       } else {
-        toast.success(`✅ Synced ${productsToUpsert.length} products!`);
+        toast.success(`✅ Synced ${data.count} products!`);
         loadProducts();
       }
     } catch (error) {
       toast.error("Error syncing products");
     }
+    
     setSyncing(false);
   };
 
