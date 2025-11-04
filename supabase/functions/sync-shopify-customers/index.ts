@@ -139,15 +139,26 @@ Deno.serve(async (req) => {
 
     console.log(`Valid customers to sync: ${customersToUpsert.length}`);
 
-    // Upsert customers to database
+    // Batch upsert customers to database (500 at a time to avoid CPU timeout)
     if (customersToUpsert.length > 0) {
-      const { error: upsertError } = await supabaseClient
-        .from('customers')
-        .upsert(customersToUpsert, { onConflict: 'phone_number' });
+      const batchSize = 500;
+      let syncedCount = 0;
+      
+      for (let i = 0; i < customersToUpsert.length; i += batchSize) {
+        const batch = customersToUpsert.slice(i, i + batchSize);
+        console.log(`Upserting batch ${Math.floor(i / batchSize) + 1}: ${batch.length} customers (${i + batch.length}/${customersToUpsert.length})`);
+        
+        const { error: upsertError } = await supabaseClient
+          .from('customers')
+          .upsert(batch, { onConflict: 'phone_number' });
 
-      if (upsertError) {
-        console.error('Database upsert error:', upsertError);
-        throw new Error(`Failed to sync customers: ${upsertError.message}`);
+        if (upsertError) {
+          console.error('Database upsert error:', upsertError);
+          throw new Error(`Failed to sync customers at batch ${Math.floor(i / batchSize) + 1}: ${upsertError.message}`);
+        }
+        
+        syncedCount += batch.length;
+        console.log(`✅ Synced ${syncedCount}/${customersToUpsert.length} customers`);
       }
 
       // Update last sync timestamp

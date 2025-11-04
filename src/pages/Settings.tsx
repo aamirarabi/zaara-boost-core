@@ -90,78 +90,56 @@ const Settings = () => {
 
   const syncCustomers = async () => {
     setSyncingCustomers(true);
-    setSyncProgress("Starting customer sync... This may take 5-8 minutes for large catalogs.");
+    setSyncProgress("Starting customer sync... Fetching data from Shopify...");
     
-    // Start the sync (this will run in background)
-    supabase.functions.invoke('sync-shopify-customers')
-      .then(({ data, error }) => {
-        setSyncingCustomers(false);
-        setSyncProgress("");
-        if (error) {
-          toast.error(error.message || "Failed to sync customers");
-        } else if (data?.error) {
-          toast.error(data.error);
-        } else {
-          toast.success(`✅ ${data.message} in ${data.duration}`);
-        }
-      })
-      .catch((error) => {
-        setSyncingCustomers(false);
-        setSyncProgress("");
-        toast.error("Error syncing customers");
-      });
-
-    // Poll for progress every 3 seconds
-    const progressInterval = setInterval(async () => {
-      const { data: customers } = await supabase
-        .from('customers')
-        .select('id', { count: 'exact', head: true });
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-customers');
       
-      if (customers !== null) {
-        setSyncProgress(`Syncing customers... ${customers || 0} customers synced so far. Please wait...`);
+      if (error) {
+        toast.error(error.message || "Failed to sync customers");
+        setSyncProgress("");
+      } else if (data?.error) {
+        toast.error(data.error);
+        setSyncProgress("");
+      } else {
+        toast.success(`✅ ${data.message} in ${data.duration}`);
+        setSyncProgress("");
+        // Reload customers page if they navigate there
+        await supabase.from('customers').select('count').single();
       }
-    }, 3000);
-
-    // Clear interval after 10 minutes max
-    setTimeout(() => clearInterval(progressInterval), 600000);
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error("Error syncing customers");
+      setSyncProgress("");
+    } finally {
+      setSyncingCustomers(false);
+    }
   };
 
   const syncOrders = async () => {
     setSyncingOrders(true);
-    setSyncProgress("Starting order sync... This may take 5-8 minutes for large catalogs.");
+    setSyncProgress("Starting order sync... Fetching data from Shopify...");
     
-    // Start the sync (this will run in background)
-    supabase.functions.invoke('sync-shopify-orders')
-      .then(({ data, error }) => {
-        setSyncingOrders(false);
-        setSyncProgress("");
-        if (error) {
-          toast.error(error.message || "Failed to sync orders");
-        } else if (data?.error) {
-          toast.error(data.error);
-        } else {
-          toast.success(`✅ ${data.message} in ${data.duration}`);
-        }
-      })
-      .catch((error) => {
-        setSyncingOrders(false);
-        setSyncProgress("");
-        toast.error("Error syncing orders");
-      });
-
-    // Poll for progress every 3 seconds
-    const progressInterval = setInterval(async () => {
-      const { data: orders } = await supabase
-        .from('shopify_orders')
-        .select('id', { count: 'exact', head: true });
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-orders');
       
-      if (orders !== null) {
-        setSyncProgress(`Syncing orders... ${orders || 0} orders synced so far. Please wait...`);
+      if (error) {
+        toast.error(error.message || "Failed to sync orders");
+        setSyncProgress("");
+      } else if (data?.error) {
+        toast.error(data.error);
+        setSyncProgress("");
+      } else {
+        toast.success(`✅ ${data.message} in ${data.duration}`);
+        setSyncProgress("");
       }
-    }, 3000);
-
-    // Clear interval after 10 minutes max
-    setTimeout(() => clearInterval(progressInterval), 600000);
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error("Error syncing orders");
+      setSyncProgress("");
+    } finally {
+      setSyncingOrders(false);
+    }
   };
 
   return (
@@ -266,10 +244,11 @@ const Settings = () => {
             <div className="p-3 bg-muted rounded-lg text-sm space-y-2">
               <p className="font-medium">📌 Sync Instructions:</p>
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>First sync takes 5-8 min for large stores (18,000+ records)</li>
+                <li>Sync takes 30-60 seconds for 3,000+ customers</li>
                 <li>Sync Customers first, then Orders (orders need customer data)</li>
                 <li>After first sync, only new/updated records are synced</li>
-                <li>Manual sync recommended: run when you need latest data</li>
+                <li>Stay on this page during sync to see progress</li>
+                <li>Check edge function logs for detailed sync progress</li>
               </ul>
             </div>
           </CardContent>
