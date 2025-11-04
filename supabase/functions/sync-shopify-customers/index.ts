@@ -139,14 +139,26 @@ Deno.serve(async (req) => {
 
     console.log(`Valid customers to sync: ${customersToUpsert.length}`);
 
+    // Deduplicate by phone_number (keep most recent updated_at for each phone)
+    const phoneMap = new Map();
+    customersToUpsert.forEach((customer: any) => {
+      const existing = phoneMap.get(customer.phone_number);
+      if (!existing || new Date(customer.updated_at) > new Date(existing.updated_at)) {
+        phoneMap.set(customer.phone_number, customer);
+      }
+    });
+    
+    const deduplicatedCustomers = Array.from(phoneMap.values());
+    console.log(`Deduplicated to ${deduplicatedCustomers.length} unique customers`);
+
     // Batch upsert customers to database (500 at a time to avoid CPU timeout)
-    if (customersToUpsert.length > 0) {
+    if (deduplicatedCustomers.length > 0) {
       const batchSize = 500;
       let syncedCount = 0;
       
-      for (let i = 0; i < customersToUpsert.length; i += batchSize) {
-        const batch = customersToUpsert.slice(i, i + batchSize);
-        console.log(`Upserting batch ${Math.floor(i / batchSize) + 1}: ${batch.length} customers (${i + batch.length}/${customersToUpsert.length})`);
+      for (let i = 0; i < deduplicatedCustomers.length; i += batchSize) {
+        const batch = deduplicatedCustomers.slice(i, i + batchSize);
+        console.log(`Upserting batch ${Math.floor(i / batchSize) + 1}: ${batch.length} customers (${i + batch.length}/${deduplicatedCustomers.length})`);
         
         const { error: upsertError } = await supabaseClient
           .from('customers')
@@ -158,7 +170,7 @@ Deno.serve(async (req) => {
         }
         
         syncedCount += batch.length;
-        console.log(`✅ Synced ${syncedCount}/${customersToUpsert.length} customers`);
+        console.log(`✅ Synced ${syncedCount}/${deduplicatedCustomers.length} customers`);
       }
 
       // Update last sync timestamp
@@ -172,14 +184,14 @@ Deno.serve(async (req) => {
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`Successfully synced ${customersToUpsert.length} customers in ${duration}s`);
+    console.log(`Successfully synced ${deduplicatedCustomers.length} customers in ${duration}s`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        count: customersToUpsert.length,
+        count: deduplicatedCustomers.length,
         duration: `${duration}s`,
-        message: `Successfully synced ${customersToUpsert.length} customers`
+        message: `Successfully synced ${deduplicatedCustomers.length} customers`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
