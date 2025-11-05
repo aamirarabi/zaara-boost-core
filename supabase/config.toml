@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.sync-shopify-customers]
 verify_jwt = false
+
+[functions.process-zaara-message]
+verify_jwt = false
+
+[functions.send-whatsapp-message]
+verify_jwt = false
+
+[functions.test-zaara]
+verify_jwt = false

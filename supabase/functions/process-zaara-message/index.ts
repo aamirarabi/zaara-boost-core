@@ -139,92 +139,69 @@ const TOOLS = [
   },
 ];
 
-// Helper function to improve search query using AI
-async function improveSearchQuery(userQuery: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+// Keyword mapping for common variations
+const KEYWORD_MAPPING: Record<string, string> = {
+  "headphones": "headset",
+  "headphone": "headset",
+  "earphones": "headset",
+  "earphone": "headset",
+  "earbuds": "headset",
+};
+
+// Helper function to improve search query
+function improveSearchQuery(userQuery: string): string {
+  const queryLower = userQuery.toLowerCase().trim();
   
-  if (!LOVABLE_API_KEY) {
-    console.log("LOVABLE_API_KEY not found, using original query");
-    return userQuery;
+  // Check keyword mapping first
+  for (const [key, value] of Object.entries(KEYWORD_MAPPING)) {
+    if (queryLower.includes(key)) {
+      console.log(`🔄 Keyword mapping: "${userQuery}" → "${value}"`);
+      return value;
+    }
+  }
+  
+  return userQuery;
+}
+
+// Send WhatsApp image
+async function sendWhatsAppImage(phone_number: string, imageUrl: string, caption: string) {
+  const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+  const WHATSAPP_PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+  
+  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
+    console.error("WhatsApp credentials not configured");
+    return;
   }
 
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are a product search assistant for an e-commerce store selling gaming chairs, headsets, monitors, keyboards, mice, and smart watches. 
-Your job is to understand customer queries (including typos, variations, and informal language) and extract the correct product category or search term.
-
-Product categories we sell:
-- Gaming chairs (chair, gaming chair, ergonomic chair)
-- Headsets/Headphones (headset, headphone, earphone, audio)
-- Gaming monitors (monitor, display, screen)
-- Keyboards (keyboard, keys)
-- Mice (mouse, mice)
-- Smart watches (watch, smartwatch, wearable)
-
-Extract the most relevant search term from the user's query. Fix typos and map variations to standard terms.`
-          },
-          {
-            role: "user",
-            content: `User query: "${userQuery}"\n\nWhat product are they looking for?`
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: phone_number,
+          type: "image",
+          image: {
+            link: imageUrl,
+            caption: caption
           }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "extract_search_term",
-              description: "Extract the corrected search term from user query",
-              parameters: {
-                type: "object",
-                properties: {
-                  search_term: {
-                    type: "string",
-                    description: "The corrected product search term"
-                  },
-                  confidence: {
-                    type: "string",
-                    enum: ["high", "medium", "low"],
-                    description: "Confidence level in the extraction"
-                  }
-                },
-                required: ["search_term", "confidence"],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "extract_search_term" } }
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
-      console.error("AI query improvement failed:", response.status);
-      return userQuery;
+      const error = await response.text();
+      console.error("Failed to send WhatsApp image:", error);
+    } else {
+      console.log("✅ WhatsApp image sent successfully");
     }
-
-    const aiResult = await response.json();
-    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-    
-    if (toolCall?.function?.arguments) {
-      const args = JSON.parse(toolCall.function.arguments);
-      console.log(`🤖 AI improved query: "${userQuery}" → "${args.search_term}" (confidence: ${args.confidence})`);
-      return args.search_term || userQuery;
-    }
-
-    return userQuery;
   } catch (error) {
-    console.error("Error improving search query:", error);
-    return userQuery;
+    console.error("Error sending WhatsApp image:", error);
   }
 }
 
@@ -240,6 +217,71 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    // Check if message is a number (product selection)
+    const messageNum = parseInt(message.trim());
+    if (!isNaN(messageNum) && messageNum > 0) {
+      console.log(`🔢 Number detected: ${messageNum}`);
+      
+      // Get conversation context to retrieve last product list
+      const { data: context } = await supabase
+        .from("conversation_context")
+        .select("last_product_list")
+        .eq("phone_number", phone_number)
+        .single();
+      
+      const productList = context?.last_product_list || [];
+      
+      if (productList.length > 0 && messageNum <= productList.length) {
+        const selectedProduct = productList[messageNum - 1];
+        console.log(`✅ Product #${messageNum} selected:`, selectedProduct.title);
+        
+        // Get full product details
+        const { data: product } = await supabase
+          .from("shopify_products")
+          .select("*")
+          .eq("product_id", selectedProduct.product_id)
+          .single();
+        
+        if (product) {
+          // Build detailed response
+          let detailsText = `📦 ${product.title}\n\n`;
+          detailsText += `💰 Price: PKR ${product.price?.toLocaleString()}\n\n`;
+          
+          if (product.description) {
+            detailsText += `${product.description.substring(0, 300)}...\n\n`;
+          }
+          
+          // Parse variants for colors/sizes
+          const variants = JSON.parse(product.variants || "[]");
+          if (variants.length > 0) {
+            const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
+            if (colors.length > 0) {
+              detailsText += `🎨 Colors: ${colors.join(", ")}\n\n`;
+            }
+          }
+          
+          const stockStatus = product.inventory && product.inventory > 0 ? "✅ In Stock" : "❌ Out of Stock";
+          detailsText += `${stockStatus}\n\n`;
+          detailsText += `Need more info? Just ask! 😊`;
+          
+          // Send product image if available
+          const images = JSON.parse(product.images || "[]");
+          if (images.length > 0) {
+            await sendWhatsAppImage(phone_number, images[0], product.title);
+          }
+          
+          // Send details text
+          await supabase.functions.invoke("send-whatsapp-message", {
+            body: { phone_number, message: detailsText },
+          });
+          
+          return new Response(JSON.stringify({ success: true, response: detailsText }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
 
     // Get last 10 messages for context
     const { data: history } = await supabase
@@ -308,8 +350,8 @@ serve(async (req) => {
 
           console.log(`🔍 Original query: "${originalQuery}"`);
 
-          // Use AI to improve the search query (handle typos, variations)
-          const improvedQuery = await improveSearchQuery(originalQuery);
+          // Apply keyword mapping
+          const improvedQuery = improveSearchQuery(originalQuery);
           const searchTerm = improvedQuery.toLowerCase();
 
           console.log(`🔍 Searching for: "${searchTerm}"`);
@@ -319,7 +361,8 @@ serve(async (req) => {
             .from("shopify_products")
             .select("*")
             .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
-            .order("inventory", { ascending: false })
+            .gt("inventory", 0) // Only in-stock products
+            .order("price", { ascending: true }) // Sort by price: cheapest first
             .limit(10);
 
           if (searchError) {
@@ -328,17 +371,25 @@ serve(async (req) => {
           } else if (products && products.length > 0) {
             console.log(`✅ Found ${products.length} products`);
 
+            // Store product list in conversation context for number selection
+            await supabase
+              .from("conversation_context")
+              .upsert({
+                phone_number,
+                last_product_list: products.map(p => ({ product_id: p.product_id, title: p.title })),
+                updated_at: new Date().toISOString()
+              });
+
             // Show ALL products found (no limit on display)
             responseText += `\n\nI found these products for you:\n\n`;
 
             products.forEach((product, index) => {
-              const stockStatus = product.inventory && product.inventory > 0 ? "✅ In Stock" : "❌ Out of Stock";
               responseText += `${index + 1}. ${product.title}\n`;
               responseText += `   💰 PKR ${product.price?.toLocaleString()}\n`;
-              responseText += `   ${stockStatus}\n\n`;
+              responseText += `   ✅ In Stock\n\n`;
             });
 
-            responseText += `Which one interests you? 😊`;
+            responseText += `Reply with the number to see details! 😊`;
           } else {
             console.log(`⚠️ No products found for: "${searchTerm}"`);
             responseText += `\n\nI couldn't find exact matches for "${args.query}".\n\n`;

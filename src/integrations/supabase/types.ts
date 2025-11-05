@@ -64,6 +64,7 @@ export type Database = {
           awaiting_response: string | null
           context_data: Json | null
           last_intent: string | null
+          last_product_list: Json | null
           last_product_viewed: string | null
           phone_number: string
           updated_at: string | null
@@ -72,6 +73,7 @@ export type Database = {
           awaiting_response?: string | null
           context_data?: Json | null
           last_intent?: string | null
+          last_product_list?: Json | null
           last_product_viewed?: string | null
           phone_number: string
           updated_at?: string | null
@@ -80,6 +82,7 @@ export type Database = {
           awaiting_response?: string | null
           context_data?: Json | null
           last_intent?: string | null
+          last_product_list?: Json | null
           last_product_viewed?: string | null
           phone_number?: string
           updated_at?: string | null
