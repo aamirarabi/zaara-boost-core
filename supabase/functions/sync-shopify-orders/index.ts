@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Declare EdgeRuntime for background tasks
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<any>): void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -30,41 +35,17 @@ function standardizePhone(phone: string): string | null {
   return null; // Invalid format
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+// Background sync function
+async function syncOrdersInBackground(
+  supabaseClient: any,
+  storeUrl: string,
+  token: string,
+  lastSync: string | null
+) {
   const startTime = Date.now();
-
+  
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Get Shopify credentials and last sync time
-    const { data: settings, error: settingsError } = await supabaseClient
-      .from('system_settings')
-      .select('*');
-
-    if (settingsError) {
-      console.error('Error fetching settings:', settingsError);
-      throw new Error('Failed to fetch system settings');
-    }
-
-    const storeUrl = settings?.find((s) => s.setting_key === 'shopify_store_url')?.setting_value;
-    const token = settings?.find((s) => s.setting_key === 'shopify_access_token')?.setting_value;
-    const lastSync = settings?.find((s) => s.setting_key === 'last_order_sync')?.setting_value;
-
-    if (!storeUrl || !token) {
-      return new Response(
-        JSON.stringify({ error: 'Shopify credentials not configured' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Starting Shopify order sync...');
+    console.log('Starting background order sync...');
     if (lastSync) {
       console.log('Incremental sync from:', lastSync);
     }
@@ -72,15 +53,12 @@ Deno.serve(async (req) => {
     let allOrders: any[] = [];
     let url = `https://${storeUrl}/admin/api/2024-10/orders.json?limit=250&status=any`;
     
-    // Add updated_at_min for incremental sync
     if (lastSync) {
       url += `&updated_at_min=${encodeURIComponent(lastSync)}`;
     }
 
-    // Fetch all orders with pagination
+    // Fetch orders with pagination
     while (url) {
-      console.log('Fetching orders from:', url);
-      
       const res = await fetch(url, {
         headers: { 'X-Shopify-Access-Token': token },
       });
@@ -98,7 +76,6 @@ Deno.serve(async (req) => {
         console.log(`Fetched ${data.orders.length} orders (Total: ${allOrders.length})`);
       }
 
-      // Check for next page in Link header
       const linkHeader = res.headers.get('Link');
       const nextUrl = linkHeader?.includes('rel="next"') 
         ? linkHeader.match(/<(.+?)>; rel="next"/)?.[1]
@@ -108,7 +85,7 @@ Deno.serve(async (req) => {
 
     console.log(`Total orders fetched: ${allOrders.length}`);
 
-    // Transform orders for database
+    // Transform orders
     const ordersToUpsert = allOrders.map((o) => {
       const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
       const fulfillments = o.fulfillments || [];
@@ -150,11 +127,9 @@ Deno.serve(async (req) => {
       };
     });
 
-    console.log(`Orders to sync: ${ordersToUpsert.length}`);
-
-    // Batch upsert orders to database (500 at a time to avoid CPU timeout)
+    // Batch upsert with smaller batches (250 at a time)
     if (ordersToUpsert.length > 0) {
-      const batchSize = 500;
+      const batchSize = 250;
       let syncedCount = 0;
       
       for (let i = 0; i < ordersToUpsert.length; i += batchSize) {
@@ -185,20 +160,61 @@ Deno.serve(async (req) => {
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`Successfully synced ${ordersToUpsert.length} orders in ${duration}s`);
+    console.log(`✅ Background sync completed: ${ordersToUpsert.length} orders in ${duration}s`);
+    
+  } catch (error) {
+    console.error('❌ Background sync failed:', error);
+    throw error;
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Get Shopify credentials
+    const { data: settings, error: settingsError } = await supabaseClient
+      .from('system_settings')
+      .select('*');
+
+    if (settingsError) {
+      console.error('Error fetching settings:', settingsError);
+      throw new Error('Failed to fetch system settings');
+    }
+
+    const storeUrl = settings?.find((s) => s.setting_key === 'shopify_store_url')?.setting_value;
+    const token = settings?.find((s) => s.setting_key === 'shopify_access_token')?.setting_value;
+    const lastSync = settings?.find((s) => s.setting_key === 'last_order_sync')?.setting_value;
+
+    if (!storeUrl || !token) {
+      return new Response(
+        JSON.stringify({ error: 'Shopify credentials not configured' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Start background sync and return immediately
+    EdgeRuntime.waitUntil(
+      syncOrdersInBackground(supabaseClient, storeUrl, token, lastSync)
+    );
 
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        count: ordersToUpsert.length,
-        duration: `${duration}s`,
-        message: `Successfully synced ${ordersToUpsert.length} orders`
+        success: true,
+        message: 'Order sync started in background. Check logs for progress.'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in sync-shopify-orders:', error);
+    console.error('Error starting sync:', error);
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
