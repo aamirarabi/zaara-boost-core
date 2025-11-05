@@ -19,8 +19,6 @@ const Settings = () => {
   const [settings, setSettings] = useState({
     whatsapp_phone_id: "",
     whatsapp_access_token: "",
-    whatsapp_business_account_id: "",
-    whatsapp_phone_number: "923288981133",
     openai_api_key: "",
     shopify_store_url: "boost-lifestyle.myshopify.com",
     shopify_access_token: "",
@@ -171,24 +169,6 @@ const Settings = () => {
                 value={settings.whatsapp_access_token}
                 onChange={(e) => setSettings({ ...settings, whatsapp_access_token: e.target.value })}
                 placeholder="Enter WhatsApp Access Token"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_business_account_id">Business Account ID</Label>
-              <Input
-                id="whatsapp_business_account_id"
-                value={settings.whatsapp_business_account_id}
-                onChange={(e) => setSettings({ ...settings, whatsapp_business_account_id: e.target.value })}
-                placeholder="Enter Business Account ID"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_phone_number">Phone Number</Label>
-              <Input
-                id="whatsapp_phone_number"
-                value={settings.whatsapp_phone_number}
-                onChange={(e) => setSettings({ ...settings, whatsapp_phone_number: e.target.value })}
-                placeholder="923288981133"
               />
             </div>
             
