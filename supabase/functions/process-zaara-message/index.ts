@@ -215,43 +215,37 @@ serve(async (req) => {
         // Execute tool functions
         if (functionName === "search_shop_catalog") {
           // Clean search term
-          const cleanTerm = args.query.trim().toLowerCase();
-          
-          console.log(`🔍 Searching for: "${cleanTerm}"`);
-          
-          // Query database - search across title, description, and tags
+          const searchTerm = args.query.trim().toLowerCase();
+
+          console.log(`🔍 Searching for: "${searchTerm}"`);
+
+          // Search products in database - case-insensitive search across title, description, and tags
           const { data: products, error: searchError } = await supabase
             .from("shopify_products")
             .select("*")
-            .or(`title.ilike.%${cleanTerm}%,description.ilike.%${cleanTerm}%,tags.ilike.%${cleanTerm}%`)
+            .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.ilike.%${searchTerm}%`)
             .order("inventory", { ascending: false })
             .limit(10);
-          
+
           if (searchError) {
             console.error("❌ Product search error:", searchError);
-          }
-          
-          console.log(`✅ Found ${products?.length || 0} products`);
-          
-          if (products && products.length > 0) {
-            // Limit display to 5 products max for customers
-            const displayProducts = products.slice(0, 5);
+            responseText += `\n\nI'm having trouble searching products right now. Please try again! 😊`;
+          } else if (products && products.length > 0) {
+            console.log(`✅ Found ${products.length} products`);
+
+            // Show ALL products found (no limit on display)
             responseText += `\n\nI found these products for you:\n\n`;
-            
-            displayProducts.forEach((p, i) => {
-              responseText += `${i + 1}. ${p.title}\n`;
-              responseText += `💰 PKR ${p.price?.toLocaleString()}\n`;
-              
-              // Show only "In Stock" or "Out of Stock" - NO quantities
-              if (p.inventory && p.inventory > 0) {
-                responseText += `✅ In Stock\n\n`;
-              } else {
-                responseText += `❌ Out of Stock\n\n`;
-              }
+
+            products.forEach((product, index) => {
+              const stockStatus = product.inventory && product.inventory > 0 ? "✅ In Stock" : "❌ Out of Stock";
+              responseText += `${index + 1}. ${product.title}\n`;
+              responseText += `   💰 PKR ${product.price?.toLocaleString()}\n`;
+              responseText += `   ${stockStatus}\n\n`;
             });
-            
+
             responseText += `Which one interests you? 😊`;
           } else {
+            console.log(`⚠️ No products found for: "${searchTerm}"`);
             responseText += `\n\nI couldn't find exact matches for "${args.query}".\n\n`;
             responseText += `Let me show you our popular categories:\n`;
             responseText += `🎮 Gaming Chairs\n`;
