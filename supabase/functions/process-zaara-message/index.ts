@@ -291,9 +291,8 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(10);
 
-    // Get settings (API key and custom prompt)
+    // Get settings (custom prompt)
     const { data: settings } = await supabase.from("system_settings").select("*");
-    const openaiKey = settings?.find((s) => s.setting_key === "openai_api_key")?.setting_value;
     const customPrompt = settings?.find((s) => s.setting_key === "zaara_system_prompt")?.setting_value;
     
     const systemPrompt = customPrompt || DEFAULT_SYSTEM_PROMPT;
@@ -306,32 +305,44 @@ serve(async (req) => {
           role: m.direction === "inbound" ? "user" : "assistant",
           content: m.content,
         })),
+      { role: "user", content: message }, // Add current user message
     ];
 
-    if (!openaiKey) {
-      console.error("OpenAI API key not configured");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableApiKey) {
+      console.error("LOVABLE_API_KEY not configured");
       return new Response(JSON.stringify({ error: "AI not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Call OpenAI with tools
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Call Lovable AI Gateway with tools
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${openaiKey}`,
+        "Authorization": `Bearer ${lovableApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "google/gemini-2.5-flash",
         messages,
         tools: TOOLS,
-        temperature: 0.7,
       }),
     });
 
-    const aiResult = await openaiResponse.json();
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error("❌ AI API error:", aiResponse.status, errorText);
+      return new Response(JSON.stringify({ error: "AI API error", details: errorText }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const aiResult = await aiResponse.json();
+    console.log("AI Response:", JSON.stringify(aiResult, null, 2));
+    
     const choice = aiResult.choices?.[0];
     let responseText = choice?.message?.content || "I apologize, I'm unable to respond right now.";
 
@@ -424,11 +435,16 @@ serve(async (req) => {
             responseText += `\n\n📦 Order #${order.order_number}\n✅ Status: ${order.fulfillment_status}\n🚚 Courier: ${order.courier_name || "TBA"}`;
           }
         } else if (functionName === "search_faqs") {
-          const { data: faqs } = await supabase
+          const { data: faqs, error: faqError } = await supabase
             .rpc("search_faqs", { search_term: args.query, result_limit: 3 });
           
+          console.log("FAQ Search Results:", faqs);
+          
           if (faqs && faqs.length > 0) {
-            responseText += `\n\n${faqs[0].answer}`;
+            // Include question and answer for context
+            responseText += `\n\n${faqs[0].question}\n\n${faqs[0].answer}`;
+          } else {
+            responseText += "\n\nI couldn't find specific information about that. Please contact our support team at +92 303 8981133 for detailed assistance.";
           }
         }
       }
