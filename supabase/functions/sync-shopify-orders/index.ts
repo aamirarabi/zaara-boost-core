@@ -69,46 +69,56 @@ async function processBatch(supabaseClient: any, orders: any[]) {
     console.log(`✅ Upserted ${customersToUpsert.length} unique customers`);
   }
 
-  const ordersToUpsert = orders.map((o) => {
-    const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
-    const fulfillments = o.fulfillments || [];
-    const tracking = fulfillments[0]?.tracking_number 
-      ? {
-          number: fulfillments[0].tracking_number,
-          url: fulfillments[0].tracking_url,
-          company: fulfillments[0].tracking_company,
-        }
-      : null;
+  // Deduplicate orders by order_id
+  const orderMap = new Map();
+  
+  orders.forEach((o) => {
+    const orderId = o.id.toString();
+    
+    // Only keep the first occurrence of each order_id
+    if (!orderMap.has(orderId)) {
+      const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
+      const fulfillments = o.fulfillments || [];
+      const tracking = fulfillments[0]?.tracking_number 
+        ? {
+            number: fulfillments[0].tracking_number,
+            url: fulfillments[0].tracking_url,
+            company: fulfillments[0].tracking_company,
+          }
+        : null;
 
-    return {
-      order_id: o.id.toString(),
-      shopify_id: o.id.toString(),
-      order_number: o.name || o.order_number?.toString(),
-      customer_id: customerPhone,
-      customer_phone: customerPhone,
-      customer_name: o.customer?.first_name && o.customer?.last_name 
-        ? `${o.customer.first_name} ${o.customer.last_name}`
-        : o.shipping_address?.name || null,
-      customer_email: o.customer?.email || o.contact_email,
-      currency: o.currency || 'PKR',
-      financial_status: o.financial_status,
-      fulfillment_status: o.fulfillment_status,
-      subtotal: parseFloat(o.subtotal_price || '0'),
-      total_price: parseFloat(o.total_price || '0'),
-      total_tax: parseFloat(o.total_tax || '0'),
-      line_items: o.line_items || [],
-      shipping_address: o.shipping_address || {},
-      billing_address: o.billing_address || {},
-      tracking_number: tracking?.number || null,
-      tracking_url: tracking?.url || null,
-      courier_name: tracking?.company || null,
-      note: o.note,
-      tags: o.tags?.split(',').map((t: string) => t.trim()) || [],
-      created_at: o.created_at,
-      updated_at: o.updated_at,
-      synced_at: new Date().toISOString(),
-    };
+      orderMap.set(orderId, {
+        order_id: orderId,
+        shopify_id: orderId,
+        order_number: o.name || o.order_number?.toString(),
+        customer_id: customerPhone,
+        customer_phone: customerPhone,
+        customer_name: o.customer?.first_name && o.customer?.last_name 
+          ? `${o.customer.first_name} ${o.customer.last_name}`
+          : o.shipping_address?.name || null,
+        customer_email: o.customer?.email || o.contact_email,
+        currency: o.currency || 'PKR',
+        financial_status: o.financial_status,
+        fulfillment_status: o.fulfillment_status,
+        subtotal: parseFloat(o.subtotal_price || '0'),
+        total_price: parseFloat(o.total_price || '0'),
+        total_tax: parseFloat(o.total_tax || '0'),
+        line_items: o.line_items || [],
+        shipping_address: o.shipping_address || {},
+        billing_address: o.billing_address || {},
+        tracking_number: tracking?.number || null,
+        tracking_url: tracking?.url || null,
+        courier_name: tracking?.company || null,
+        note: o.note,
+        tags: o.tags?.split(',').map((t: string) => t.trim()) || [],
+        created_at: o.created_at,
+        updated_at: o.updated_at,
+        synced_at: new Date().toISOString(),
+      });
+    }
   });
+
+  const ordersToUpsert = Array.from(orderMap.values());
 
   const { error } = await supabaseClient
     .from('shopify_orders')
@@ -118,7 +128,7 @@ async function processBatch(supabaseClient: any, orders: any[]) {
     console.error('❌ Order upsert error:', error);
     throw error;
   }
-  console.log(`✅ Upserted ${ordersToUpsert.length} orders`);
+  console.log(`✅ Upserted ${ordersToUpsert.length} unique orders`);
 }
 
 // Background sync function
