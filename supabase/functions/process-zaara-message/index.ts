@@ -139,6 +139,95 @@ const TOOLS = [
   },
 ];
 
+// Helper function to improve search query using AI
+async function improveSearchQuery(userQuery: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  if (!LOVABLE_API_KEY) {
+    console.log("LOVABLE_API_KEY not found, using original query");
+    return userQuery;
+  }
+
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: `You are a product search assistant for an e-commerce store selling gaming chairs, headsets, monitors, keyboards, mice, and smart watches. 
+Your job is to understand customer queries (including typos, variations, and informal language) and extract the correct product category or search term.
+
+Product categories we sell:
+- Gaming chairs (chair, gaming chair, ergonomic chair)
+- Headsets/Headphones (headset, headphone, earphone, audio)
+- Gaming monitors (monitor, display, screen)
+- Keyboards (keyboard, keys)
+- Mice (mouse, mice)
+- Smart watches (watch, smartwatch, wearable)
+
+Extract the most relevant search term from the user's query. Fix typos and map variations to standard terms.`
+          },
+          {
+            role: "user",
+            content: `User query: "${userQuery}"\n\nWhat product are they looking for?`
+          }
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "extract_search_term",
+              description: "Extract the corrected search term from user query",
+              parameters: {
+                type: "object",
+                properties: {
+                  search_term: {
+                    type: "string",
+                    description: "The corrected product search term"
+                  },
+                  confidence: {
+                    type: "string",
+                    enum: ["high", "medium", "low"],
+                    description: "Confidence level in the extraction"
+                  }
+                },
+                required: ["search_term", "confidence"],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "extract_search_term" } }
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("AI query improvement failed:", response.status);
+      return userQuery;
+    }
+
+    const aiResult = await response.json();
+    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
+    
+    if (toolCall?.function?.arguments) {
+      const args = JSON.parse(toolCall.function.arguments);
+      console.log(`🤖 AI improved query: "${userQuery}" → "${args.search_term}" (confidence: ${args.confidence})`);
+      return args.search_term || userQuery;
+    }
+
+    return userQuery;
+  } catch (error) {
+    console.error("Error improving search query:", error);
+    return userQuery;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -215,7 +304,13 @@ serve(async (req) => {
         // Execute tool functions
         if (functionName === "search_shop_catalog") {
           // Clean search term
-          const searchTerm = args.query.trim().toLowerCase();
+          const originalQuery = args.query.trim();
+
+          console.log(`🔍 Original query: "${originalQuery}"`);
+
+          // Use AI to improve the search query (handle typos, variations)
+          const improvedQuery = await improveSearchQuery(originalQuery);
+          const searchTerm = improvedQuery.toLowerCase();
 
           console.log(`🔍 Searching for: "${searchTerm}"`);
 
