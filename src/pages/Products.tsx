@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { formatPKRCurrency } from "@/lib/utils";
 
 const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -183,7 +184,7 @@ const Products = () => {
                   )}
                   <h3 className="font-semibold mb-2 line-clamp-2">{product.title}</h3>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-lg font-bold text-primary">PKR {product.price?.toLocaleString()}</span>
+                    <span className="text-lg font-bold text-primary">{formatPKRCurrency(product.price)}</span>
                     <Badge variant={product.inventory > 0 ? "default" : "destructive"}>
                       {product.inventory > 0 ? `Stock: ${product.inventory}` : "Out of Stock"}
                     </Badge>

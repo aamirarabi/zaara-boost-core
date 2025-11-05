@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Package, MessageSquare, ShoppingCart } from "lucide-react";
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { formatPakistanDate } from "@/lib/utils";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -45,7 +46,7 @@ const Dashboard = () => {
     if (analytics) {
       setMessageData(
         analytics.map((a) => ({
-          date: new Date(a.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          date: formatPakistanDate(a.date),
           inbound: a.inbound_count,
           outbound: a.outbound_count,
         }))

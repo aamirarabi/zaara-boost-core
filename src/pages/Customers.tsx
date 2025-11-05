@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, UserPlus, Users, TrendingUp, ShoppingBag, DollarSign } from "lucide-react";
+import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
 
 const Customers = () => {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -108,7 +109,7 @@ const Customers = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.newThisMonth}</div>
-              <p className="text-xs text-muted-foreground">Since {new Date().toLocaleString('default', { month: 'long' })}</p>
+              <p className="text-xs text-muted-foreground">Since {getPakistanMonthName()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -127,7 +128,7 @@ const Customers = () => {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">PKR {stats.totalRevenue.toLocaleString()}</div>
+              <div className="text-2xl font-bold">{formatPKRCurrency(stats.totalRevenue)}</div>
               <p className="text-xs text-muted-foreground">All time revenue</p>
             </CardContent>
           </Card>
@@ -193,11 +194,9 @@ const Customers = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>{customer.order_count}</TableCell>
-                    <TableCell>PKR {customer.total_spend?.toLocaleString() || 0}</TableCell>
+                    <TableCell>{formatPKRCurrency(customer.total_spend || 0)}</TableCell>
                     <TableCell>
-                      {customer.last_interaction_at
-                        ? new Date(customer.last_interaction_at).toLocaleDateString()
-                        : "—"}
+                      {formatPakistanDate(customer.last_interaction_at)}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Package, Clock, CheckCircle, TrendingUp } from "lucide-react";
+import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
 
 const Orders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -138,7 +139,7 @@ const Orders = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.thisMonthOrders}</div>
-              <p className="text-xs text-muted-foreground">Since {new Date().toLocaleString('default', { month: 'long' })}</p>
+              <p className="text-xs text-muted-foreground">Since {getPakistanMonthName()}</p>
             </CardContent>
           </Card>
         </div>
@@ -199,7 +200,7 @@ const Orders = () => {
                     <TableCell className="font-medium">#{order.order_number}</TableCell>
                     <TableCell>{order.customer_name || "—"}</TableCell>
                     <TableCell>{order.customer_phone || "—"}</TableCell>
-                    <TableCell>PKR {order.total_price?.toLocaleString()}</TableCell>
+                    <TableCell>{formatPKRCurrency(order.total_price)}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(order.fulfillment_status)}>
                         {order.fulfillment_status || "Pending"}
@@ -208,7 +209,7 @@ const Orders = () => {
                     <TableCell>{order.courier_name || "—"}</TableCell>
                     <TableCell className="font-mono text-sm">{order.tracking_number || "—"}</TableCell>
                     <TableCell>
-                      {order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}
+                      {formatPakistanDate(order.created_at)}
                     </TableCell>
                   </TableRow>
                 ))}

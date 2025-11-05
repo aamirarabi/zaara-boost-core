@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { formatPakistanDate } from "@/lib/utils";
 
 const Analytics = () => {
   const [messageData, setMessageData] = useState<any[]>([]);
@@ -23,7 +24,7 @@ const Analytics = () => {
     if (analytics) {
       setMessageData(
         analytics.map((a) => ({
-          date: new Date(a.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          date: formatPakistanDate(a.date),
           inbound: a.inbound_count,
           outbound: a.outbound_count,
           zaara: a.zaara_handled,

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
+import { formatPakistanDate } from "@/lib/utils";
 
 const Warranty = () => {
   const [claims, setClaims] = useState<any[]>([]);
@@ -106,7 +107,7 @@ const Warranty = () => {
                       <Badge variant={getStatusColor(claim.status)}>{claim.status}</Badge>
                     </TableCell>
                     <TableCell>
-                      {claim.created_at ? new Date(claim.created_at).toLocaleDateString() : "—"}
+                      {formatPakistanDate(claim.created_at)}
                     </TableCell>
                   </TableRow>
                 ))}
