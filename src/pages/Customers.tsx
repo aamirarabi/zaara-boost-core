@@ -7,16 +7,55 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, UserPlus } from "lucide-react";
+import { Search, UserPlus, Users, TrendingUp, ShoppingBag, DollarSign } from "lucide-react";
 
 const Customers = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
+  const [stats, setStats] = useState({
+    totalCustomers: 0,
+    newThisMonth: 0,
+    totalOrders: 0,
+    totalRevenue: 0,
+  });
 
   useEffect(() => {
     loadCustomers();
+    loadStats();
   }, [filterType]);
+
+  const loadStats = async () => {
+    // Get total customers
+    const { count: totalCustomers } = await supabase
+      .from("customers")
+      .select("*", { count: "exact", head: true });
+
+    // Get new customers this month
+    const firstDayOfMonth = new Date();
+    firstDayOfMonth.setDate(1);
+    firstDayOfMonth.setHours(0, 0, 0, 0);
+
+    const { count: newThisMonth } = await supabase
+      .from("customers")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", firstDayOfMonth.toISOString());
+
+    // Get total orders and revenue
+    const { data: aggregateData } = await supabase
+      .from("customers")
+      .select("order_count, total_spend");
+
+    const totalOrders = aggregateData?.reduce((sum, c) => sum + (c.order_count || 0), 0) || 0;
+    const totalRevenue = aggregateData?.reduce((sum, c) => sum + (parseFloat(c.total_spend as any) || 0), 0) || 0;
+
+    setStats({
+      totalCustomers: totalCustomers || 0,
+      newThisMonth: newThisMonth || 0,
+      totalOrders,
+      totalRevenue,
+    });
+  };
 
   const loadCustomers = async () => {
     let query = supabase.from("customers").select("*").order("created_at", { ascending: false });
@@ -50,7 +89,62 @@ const Customers = () => {
           </Button>
         </div>
 
-        <Card>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalCustomers}</div>
+              <p className="text-xs text-muted-foreground">Registered customers</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">New This Month</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.newThisMonth}</div>
+              <p className="text-xs text-muted-foreground">Since {new Date().toLocaleString('default', { month: 'long' })}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalOrders}</div>
+              <p className="text-xs text-muted-foreground">All time orders</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">PKR {stats.totalRevenue.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">All time revenue</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {customers.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No customers yet</h3>
+              <p className="text-muted-foreground text-center">
+                Sync from Shopify in Settings to get started.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
           <CardHeader>
             <div className="flex gap-4">
               <div className="flex-1 relative">
@@ -111,6 +205,7 @@ const Customers = () => {
             </Table>
           </CardContent>
         </Card>
+        )}
       </div>
     </Layout>
   );
