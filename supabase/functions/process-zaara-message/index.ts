@@ -214,40 +214,24 @@ serve(async (req) => {
 
         // Execute tool functions
         if (functionName === "search_shop_catalog") {
-          // Map common keywords to actual product terms
-          let searchTerms: string[] = [];
-          const query = args.query.toLowerCase();
+          // Clean search term
+          const cleanTerm = args.query.trim().toLowerCase();
           
-          // Keyword mapping
-          if (query.includes("headphone") || query.includes("headset")) {
-            searchTerms.push("headset", "headphones");
-          } else if (query.includes("chair")) {
-            searchTerms.push("chair");
-          } else if (query.includes("mouse") || query.includes("mice")) {
-            searchTerms.push("mouse", "mice");
-          } else if (query.includes("keyboard")) {
-            searchTerms.push("keyboard");
-          } else if (query.includes("monitor") || query.includes("display")) {
-            searchTerms.push("monitor", "display");
-          } else {
-            searchTerms.push(query);
-          }
+          console.log(`🔍 Searching for: "${cleanTerm}"`);
           
-          // Build OR condition for multiple search terms
-          let orConditions: string[] = [];
-          searchTerms.forEach(term => {
-            orConditions.push(`title.ilike.%${term}%`);
-            orConditions.push(`description.ilike.%${term}%`);
-            orConditions.push(`tags::text.ilike.%${term}%`);
-          });
-          
-          const { data: products } = await supabase
+          // Query database - search across title, description, and tags
+          const { data: products, error: searchError } = await supabase
             .from("shopify_products")
             .select("*")
-            .eq("status", "active")
-            .or(orConditions.join(","))
+            .or(`title.ilike.%${cleanTerm}%,description.ilike.%${cleanTerm}%,tags.ilike.%${cleanTerm}%`)
             .order("inventory", { ascending: false })
             .limit(10);
+          
+          if (searchError) {
+            console.error("❌ Product search error:", searchError);
+          }
+          
+          console.log(`✅ Found ${products?.length || 0} products`);
           
           if (products && products.length > 0) {
             // Limit display to 5 products max for customers
