@@ -2,3 +2,12 @@ project_id = "szralwiwcilltwmxxczq"
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+[functions.sync-shopify-orders]
+verify_jwt = false
+
+[functions.sync-shopify-products]
+verify_jwt = false
+
+[functions.sync-shopify-customers]
+verify_jwt = false

@@ -31,6 +31,56 @@ function standardizePhone(phone: string): string | null {
   return null;
 }
 
+// Helper to transform and insert orders
+async function processBatch(supabaseClient: any, orders: any[]) {
+  const ordersToUpsert = orders.map((o) => {
+    const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
+    const fulfillments = o.fulfillments || [];
+    const tracking = fulfillments[0]?.tracking_number 
+      ? {
+          number: fulfillments[0].tracking_number,
+          url: fulfillments[0].tracking_url,
+          company: fulfillments[0].tracking_company,
+        }
+      : null;
+
+    return {
+      order_id: o.id.toString(),
+      shopify_id: o.id.toString(),
+      order_number: o.name || o.order_number?.toString(),
+      customer_id: customerPhone,
+      customer_phone: customerPhone,
+      customer_name: o.customer?.first_name && o.customer?.last_name 
+        ? `${o.customer.first_name} ${o.customer.last_name}`
+        : o.shipping_address?.name || null,
+      customer_email: o.customer?.email || o.contact_email,
+      currency: o.currency || 'PKR',
+      financial_status: o.financial_status,
+      fulfillment_status: o.fulfillment_status,
+      subtotal: parseFloat(o.subtotal_price || '0'),
+      total_price: parseFloat(o.total_price || '0'),
+      total_tax: parseFloat(o.total_tax || '0'),
+      line_items: o.line_items || [],
+      shipping_address: o.shipping_address || {},
+      billing_address: o.billing_address || {},
+      tracking_number: tracking?.number || null,
+      tracking_url: tracking?.url || null,
+      courier_name: tracking?.company || null,
+      note: o.note,
+      tags: o.tags?.split(',').map((t: string) => t.trim()) || [],
+      created_at: o.created_at,
+      updated_at: o.updated_at,
+      synced_at: new Date().toISOString(),
+    };
+  });
+
+  const { error } = await supabaseClient
+    .from('shopify_orders')
+    .upsert(ordersToUpsert, { onConflict: 'order_id' });
+
+  if (error) throw error;
+}
+
 // Background sync function
 async function syncOrdersInBackground(
   supabaseClient: any,
@@ -39,6 +89,7 @@ async function syncOrdersInBackground(
   lastSync: string | null
 ) {
   const startTime = Date.now();
+  let totalSynced = 0;
   
   try {
     console.log('🚀 Starting background order sync...');
@@ -49,15 +100,24 @@ async function syncOrdersInBackground(
     let allOrders: any[] = [];
     let url = `https://${storeUrl}/admin/api/2024-10/orders.json?limit=250&status=any`;
     
+    console.log('🔗 Shopify API URL:', url);
+    console.log('🔑 Using store:', storeUrl);
+    console.log('🔐 Token configured:', token ? 'Yes (length: ' + token.length + ')' : 'No');
+    
     if (lastSync) {
       url += `&updated_at_min=${encodeURIComponent(lastSync)}`;
+      console.log('📅 Incremental sync from:', lastSync);
+    } else {
+      console.log('📅 Full sync (no previous sync timestamp found)');
     }
 
-    // Fetch orders with pagination
+    // Fetch orders with pagination - with batching to avoid CPU limits
     let pageCount = 0;
-    while (url) {
+    const MAX_PAGES = 20; // Limit to 5000 orders per sync (20 pages * 250)
+    
+    while (url && pageCount < MAX_PAGES) {
       pageCount++;
-      console.log(`📦 Fetching page ${pageCount}...`);
+      console.log(`📦 Fetching page ${pageCount}/${MAX_PAGES}...`);
       
       const res = await fetch(url, {
         headers: { 'X-Shopify-Access-Token': token },
@@ -74,6 +134,14 @@ async function syncOrdersInBackground(
       if (data.orders) {
         allOrders.push(...data.orders);
         console.log(`✅ Page ${pageCount}: Fetched ${data.orders.length} orders (Total: ${allOrders.length})`);
+        
+        // Batch insert every 10 pages to avoid memory issues
+        if (pageCount % 10 === 0 && allOrders.length > 0) {
+          console.log(`💾 Mid-sync batch insert: ${allOrders.length} orders...`);
+          await processBatch(supabaseClient, allOrders);
+          totalSynced += allOrders.length;
+          allOrders = []; // Clear after inserting
+        }
       }
 
       const linkHeader = res.headers.get('Link');
@@ -82,89 +150,30 @@ async function syncOrdersInBackground(
         : null;
       url = nextUrl || '';
     }
-
-    console.log(`📊 Total orders fetched: ${allOrders.length}`);
-
-    // Transform orders
-    const ordersToUpsert = allOrders.map((o) => {
-      const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
-      const fulfillments = o.fulfillments || [];
-      const tracking = fulfillments[0]?.tracking_number 
-        ? {
-            number: fulfillments[0].tracking_number,
-            url: fulfillments[0].tracking_url,
-            company: fulfillments[0].tracking_company,
-          }
-        : null;
-
-      return {
-        order_id: o.id.toString(),
-        shopify_id: o.id.toString(),
-        order_number: o.name || o.order_number?.toString(),
-        customer_id: customerPhone,
-        customer_phone: customerPhone,
-        customer_name: o.customer?.first_name && o.customer?.last_name 
-          ? `${o.customer.first_name} ${o.customer.last_name}`
-          : o.shipping_address?.name || null,
-        customer_email: o.customer?.email || o.contact_email,
-        currency: o.currency || 'PKR',
-        financial_status: o.financial_status,
-        fulfillment_status: o.fulfillment_status,
-        subtotal: parseFloat(o.subtotal_price || '0'),
-        total_price: parseFloat(o.total_price || '0'),
-        total_tax: parseFloat(o.total_tax || '0'),
-        line_items: o.line_items || [],
-        shipping_address: o.shipping_address || {},
-        billing_address: o.billing_address || {},
-        tracking_number: tracking?.number || null,
-        tracking_url: tracking?.url || null,
-        courier_name: tracking?.company || null,
-        note: o.note,
-        tags: o.tags?.split(',').map((t: string) => t.trim()) || [],
-        created_at: o.created_at,
-        updated_at: o.updated_at,
-        synced_at: new Date().toISOString(),
-      };
-    });
-
-    // Batch upsert with progress logging
-    if (ordersToUpsert.length > 0) {
-      const batchSize = 100; // Smaller batches to avoid CPU limit
-      let syncedCount = 0;
-      
-      for (let i = 0; i < ordersToUpsert.length; i += batchSize) {
-        const batch = ordersToUpsert.slice(i, i + batchSize);
-        const batchNum = Math.floor(i / batchSize) + 1;
-        const totalBatches = Math.ceil(ordersToUpsert.length / batchSize);
-        
-        console.log(`💾 Batch ${batchNum}/${totalBatches}: Upserting ${batch.length} orders...`);
-        
-        const { error: upsertError } = await supabaseClient
-          .from('shopify_orders')
-          .upsert(batch, { onConflict: 'order_id' });
-
-        if (upsertError) {
-          console.error(`❌ Batch ${batchNum} failed:`, upsertError);
-          throw new Error(`Failed at batch ${batchNum}: ${upsertError.message}`);
-        }
-        
-        syncedCount += batch.length;
-        const progress = ((syncedCount / ordersToUpsert.length) * 100).toFixed(1);
-        console.log(`✅ Batch ${batchNum}/${totalBatches}: ${syncedCount}/${ordersToUpsert.length} orders (${progress}%)`);
-      }
-
-      // Update last sync timestamp
-      await supabaseClient
-        .from('system_settings')
-        .upsert({
-          setting_key: 'last_order_sync',
-          setting_value: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
+    
+    if (pageCount === MAX_PAGES && url) {
+      console.log(`⚠️ Reached page limit (${MAX_PAGES}). Use incremental sync for remaining orders.`);
     }
 
+    console.log(`📊 Final batch: ${allOrders.length} orders`);
+
+    // Insert remaining orders
+    if (allOrders.length > 0) {
+      await processBatch(supabaseClient, allOrders);
+      totalSynced += allOrders.length;
+    }
+
+    // Update last sync timestamp
+    await supabaseClient
+      .from('system_settings')
+      .upsert({
+        setting_key: 'last_order_sync',
+        setting_value: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`🎉 Background sync completed: ${ordersToUpsert.length} orders in ${duration}s`);
+    console.log(`🎉 Background sync completed: ${totalSynced} orders in ${duration}s`);
     
   } catch (error) {
     console.error('❌ Background sync failed:', error);

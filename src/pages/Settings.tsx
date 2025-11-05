@@ -114,7 +114,7 @@ const Settings = () => {
 
   const syncOrders = async () => {
     setSyncingOrders(true);
-    setSyncProgress("Starting order sync... Fetching data from Shopify...");
+    setSyncProgress("Starting order sync... This may take a moment for large catalogs.");
     
     try {
       const { data, error } = await supabase.functions.invoke('sync-shopify-orders');
@@ -126,12 +126,12 @@ const Settings = () => {
         toast.error(data.error);
         setSyncProgress("");
       } else {
-        toast.success(`✅ ${data.message} in ${data.duration}`);
+        toast.success("✅ Order sync started! Check Orders page in a moment.");
         setSyncProgress("");
       }
     } catch (error) {
-      console.error('Sync error:', error);
-      toast.error("Error syncing orders");
+      console.error("Sync error:", error);
+      toast.error("Error syncing orders - check console for details");
       setSyncProgress("");
     } finally {
       setSyncingOrders(false);
