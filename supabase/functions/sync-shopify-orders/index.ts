@@ -41,11 +41,12 @@ async function processBatch(supabaseClient: any, orders: any[]) {
       
       return {
         phone_number: customerPhone,
-        name: o.customer?.first_name && o.customer?.last_name 
+        customer_name: o.customer?.first_name && o.customer?.last_name 
           ? `${o.customer.first_name} ${o.customer.last_name}`
           : o.shipping_address?.name || null,
+        first_name: o.customer?.first_name || null,
+        last_name: o.customer?.last_name || null,
         email: o.customer?.email || o.contact_email,
-        synced_at: new Date().toISOString(),
       };
     })
     .filter(Boolean);
