@@ -60,6 +60,12 @@ Please tell me what you would like help with! 😊"
 • Return actual products from database with prices and details
 • If no results, suggest similar categories or ask for clarification
 
+## FAQ & HELP QUERIES
+• When user asks about policies, warranty, shipping, videos, or general questions, use the search_faqs tool
+• Questions like "How do I...", "Where can I find...", "What is your policy..." should trigger FAQ search
+• Use search_faqs for any non-product-specific informational questions
+• Always check FAQs before giving general answers about company policies
+
 ## CLOSING
 When the customer thanks you or ends the chat politely:
 "It was a pleasure assisting you 🌸
@@ -291,13 +297,13 @@ serve(async (req) => {
               const minPrice = Math.min(...prices);
               const maxPrice = Math.max(...prices);
               if (minPrice === maxPrice) {
-                priceText = `Rs. ${minPrice.toLocaleString()}`;
+                priceText = `PKR ${minPrice.toLocaleString()}`;
               } else {
-                priceText = `Rs. ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`;
+                priceText = `PKR ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`;
               }
             }
           } else {
-            priceText = `Rs. ${product.price?.toLocaleString()}`;
+            priceText = `PKR ${product.price?.toLocaleString()}`;
           }
           
           // Get colors

@@ -72,11 +72,11 @@ const TEST_CASES: TestCase[] = [
     cleanup: true
   },
   {
-    name: "TEST 5: FAQ Search - Chair Videos",
+    name: "TEST 5: FAQ Search - Product Videos",
     phone_number: "923000000005",
-    message: "Where can I watch videos for Boost Supreme Chair?",
+    message: "How can I watch product videos?",
     expected_behavior: {
-      should_contain: ["video", "youtube"],
+      should_contain: ["video", "YouTube"],
     },
     cleanup: true
   },
