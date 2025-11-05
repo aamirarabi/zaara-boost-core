@@ -148,6 +148,31 @@ const KEYWORD_MAPPING: Record<string, string> = {
   "earbuds": "headset",
 };
 
+// Helper function to clean HTML for WhatsApp
+function cleanHtmlForWhatsApp(html: string): string {
+  if (!html) return "";
+  
+  let clean = html;
+  
+  // Convert <br> tags to newlines
+  clean = clean.replace(/<br\s*\/?>/gi, "\n");
+  
+  // Convert <strong> to *bold*
+  clean = clean.replace(/<strong>(.*?)<\/strong>/gi, "*$1*");
+  
+  // Convert <li> to bullet points
+  clean = clean.replace(/<li>(.*?)<\/li>/gi, "• $1\n");
+  
+  // Remove all other HTML tags
+  clean = clean.replace(/<[^>]+>/g, "");
+  
+  // Clean up extra whitespace
+  clean = clean.replace(/\n\s*\n\s*\n/g, "\n\n"); // Max 2 newlines
+  clean = clean.trim();
+  
+  return clean;
+}
+
 // Helper function to improve search query
 function improveSearchQuery(userQuery: string): string {
   const queryLower = userQuery.toLowerCase().trim();
@@ -161,6 +186,17 @@ function improveSearchQuery(userQuery: string): string {
   }
   
   return userQuery;
+}
+
+// Helper function to get customer name from conversation context
+async function getCustomerName(supabase: any, phone_number: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("conversation_context")
+    .select("customer_name")
+    .eq("phone_number", phone_number)
+    .single();
+  
+  return data?.customer_name || null;
 }
 
 // Send WhatsApp image
@@ -244,34 +280,54 @@ serve(async (req) => {
           .single();
         
         if (product) {
-          // Build detailed response
-          let detailsText = `📦 ${product.title}\n\n`;
-          detailsText += `💰 Price: PKR ${product.price?.toLocaleString()}\n\n`;
-          
-          if (product.description) {
-            detailsText += `${product.description.substring(0, 300)}...\n\n`;
-          }
-          
-          // Parse variants for colors/sizes
+          // Parse variants for price range and colors
           const variants = JSON.parse(product.variants || "[]");
-          if (variants.length > 0) {
-            const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
-            if (colors.length > 0) {
-              detailsText += `🎨 Colors: ${colors.join(", ")}\n\n`;
+          
+          // Get price range
+          let priceText = "";
+          if (variants.length > 1) {
+            const prices = variants.map((v: any) => parseFloat(v.price)).filter((p: number) => !isNaN(p));
+            if (prices.length > 0) {
+              const minPrice = Math.min(...prices);
+              const maxPrice = Math.max(...prices);
+              if (minPrice === maxPrice) {
+                priceText = `Rs. ${minPrice.toLocaleString()}`;
+              } else {
+                priceText = `Rs. ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`;
+              }
             }
+          } else {
+            priceText = `Rs. ${product.price?.toLocaleString()}`;
           }
           
-          const stockStatus = product.inventory && product.inventory > 0 ? "✅ In Stock" : "❌ Out of Stock";
-          detailsText += `${stockStatus}\n\n`;
-          detailsText += `Need more info? Just ask! 😊`;
+          // Get colors
+          const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
           
-          // Send product image if available
+          // Clean description
+          const cleanDescription = cleanHtmlForWhatsApp(product.description || "");
+          const features = cleanDescription.split("\n").filter((line: string) => line.trim().startsWith("•")).slice(0, 5);
+          
+          // Build structured response
+          let detailsText = `*${product.title}*\n\n`;
+          detailsText += `💰 Price: ${priceText}\n`;
+          if (colors.length > 0) {
+            detailsText += `🎨 Available Colors: ${colors.join(", ")}\n`;
+          }
+          detailsText += `✅ Availability: In stock\n\n`;
+          
+          if (features.length > 0) {
+            detailsText += `✨ Key Features:\n${features.join("\n")}\n\n`;
+          }
+          
+          detailsText += `Would you like to order this? 😊`;
+          
+          // Send product image FIRST
           const images = JSON.parse(product.images || "[]");
           if (images.length > 0) {
             await sendWhatsAppImage(phone_number, images[0], product.title);
           }
           
-          // Send details text
+          // Send details text AFTER image
           await supabase.functions.invoke("send-whatsapp-message", {
             body: { phone_number, message: detailsText },
           });
@@ -344,10 +400,12 @@ serve(async (req) => {
     console.log("AI Response:", JSON.stringify(aiResult, null, 2));
     
     const choice = aiResult.choices?.[0];
-    let responseText = choice?.message?.content || "I apologize, I'm unable to respond right now.";
+    let responseText = choice?.message?.content || "";
+    let toolExecuted = false;
 
     // Handle tool calls if present
     if (choice?.message?.tool_calls) {
+      toolExecuted = true;
       for (const toolCall of choice.message.tool_calls) {
         const functionName = toolCall.function.name;
         const args = JSON.parse(toolCall.function.arguments);
@@ -391,8 +449,12 @@ serve(async (req) => {
                 updated_at: new Date().toISOString()
               });
 
-            // Show ALL products found (no limit on display)
-            responseText += `\n\nI found these products for you:\n\n`;
+            // Get customer name for personalization
+            const customerName = await getCustomerName(supabase, phone_number);
+            const greeting = customerName ? `${customerName} Sir` : "you";
+
+            // Show ALL products found (clean format)
+            responseText = `I found these products for ${greeting}:\n\n`;
 
             products.forEach((product, index) => {
               responseText += `${index + 1}. ${product.title}\n`;
@@ -448,6 +510,11 @@ serve(async (req) => {
           }
         }
       }
+    }
+
+    // Only use fallback error message if no tool was executed and no response text
+    if (!toolExecuted && !responseText) {
+      responseText = "I apologize, I'm unable to respond right now.";
     }
 
     // Send response via WhatsApp
