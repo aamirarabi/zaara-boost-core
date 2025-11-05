@@ -33,13 +33,16 @@ function standardizePhone(phone: string): string | null {
 
 // Helper to transform and insert orders
 async function processBatch(supabaseClient: any, orders: any[]) {
-  // First, ensure all customers exist
-  const customersToUpsert = orders
-    .map((o) => {
-      const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
-      if (!customerPhone) return null;
-      
-      return {
+  // First, ensure all customers exist - DEDUPLICATE by phone_number
+  const customerMap = new Map();
+  
+  orders.forEach((o) => {
+    const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
+    if (!customerPhone) return;
+    
+    // Only keep the first occurrence of each phone number
+    if (!customerMap.has(customerPhone)) {
+      customerMap.set(customerPhone, {
         phone_number: customerPhone,
         customer_name: o.customer?.first_name && o.customer?.last_name 
           ? `${o.customer.first_name} ${o.customer.last_name}`
@@ -47,9 +50,11 @@ async function processBatch(supabaseClient: any, orders: any[]) {
         first_name: o.customer?.first_name || null,
         last_name: o.customer?.last_name || null,
         email: o.customer?.email || o.contact_email,
-      };
-    })
-    .filter(Boolean);
+      });
+    }
+  });
+
+  const customersToUpsert = Array.from(customerMap.values());
 
   // Upsert customers first
   if (customersToUpsert.length > 0) {
@@ -61,7 +66,7 @@ async function processBatch(supabaseClient: any, orders: any[]) {
       console.error('❌ Customer upsert error:', customerError);
       throw customerError;
     }
-    console.log(`✅ Upserted ${customersToUpsert.length} customers`);
+    console.log(`✅ Upserted ${customersToUpsert.length} unique customers`);
   }
 
   const ordersToUpsert = orders.map((o) => {
