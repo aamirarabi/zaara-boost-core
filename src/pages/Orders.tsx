@@ -4,18 +4,61 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, TrendingUp } from "lucide-react";
 
 const Orders = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    fulfilledOrders: 0,
+    thisMonthOrders: 0,
+  });
 
   useEffect(() => {
     loadOrders();
+    loadStats();
   }, [statusFilter]);
+
+  const loadStats = async () => {
+    // Get total orders
+    const { count: totalOrders } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true });
+
+    // Get pending orders (null, 'pending', or 'partial')
+    const { count: pendingOrders } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true })
+      .or("fulfillment_status.is.null,fulfillment_status.eq.pending,fulfillment_status.eq.partial");
+
+    // Get fulfilled orders
+    const { count: fulfilledOrders } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true })
+      .eq("fulfillment_status", "fulfilled");
+
+    // Get orders this month
+    const firstDayOfMonth = new Date();
+    firstDayOfMonth.setDate(1);
+    firstDayOfMonth.setHours(0, 0, 0, 0);
+
+    const { count: thisMonthOrders } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", firstDayOfMonth.toISOString());
+
+    setStats({
+      totalOrders: totalOrders || 0,
+      pendingOrders: pendingOrders || 0,
+      fulfilledOrders: fulfilledOrders || 0,
+      thisMonthOrders: thisMonthOrders || 0,
+    });
+  };
 
   const loadOrders = async () => {
     let query = supabase.from("shopify_orders").select("*").order("created_at", { ascending: false });
@@ -56,7 +99,62 @@ const Orders = () => {
           <p className="text-muted-foreground">Track and manage customer orders</p>
         </div>
 
-        <Card>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalOrders}</div>
+              <p className="text-xs text-muted-foreground">All time orders</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{stats.pendingOrders}</div>
+              <p className="text-xs text-muted-foreground">Awaiting fulfillment</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Fulfilled Orders</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats.fulfilledOrders}</div>
+              <p className="text-xs text-muted-foreground">Completed orders</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">This Month</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.thisMonthOrders}</div>
+              <p className="text-xs text-muted-foreground">Since {new Date().toLocaleString('default', { month: 'long' })}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {orders.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Package className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
+              <p className="text-muted-foreground text-center">
+                Sync from Shopify in Settings to get started.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
           <CardHeader>
             <div className="flex gap-4">
               <div className="flex-1 relative">
@@ -118,6 +216,7 @@ const Orders = () => {
             </Table>
           </CardContent>
         </Card>
+        )}
       </div>
     </Layout>
   );
