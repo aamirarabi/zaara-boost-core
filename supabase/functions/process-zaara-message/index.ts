@@ -223,7 +223,7 @@ serve(async (req) => {
           const { data: products, error: searchError } = await supabase
             .from("shopify_products")
             .select("*")
-            .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.ilike.%${searchTerm}%`)
+            .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags::text.ilike.%${searchTerm}%`)
             .order("inventory_quantity", { ascending: false })
             .limit(10);
 
