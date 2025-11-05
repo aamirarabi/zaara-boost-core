@@ -224,7 +224,7 @@ serve(async (req) => {
             .from("shopify_products")
             .select("*")
             .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.ilike.%${searchTerm}%`)
-            .order("inventory", { ascending: false })
+            .order("inventory_quantity", { ascending: false })
             .limit(10);
 
           if (searchError) {
@@ -237,7 +237,7 @@ serve(async (req) => {
             responseText += `\n\nI found these products for you:\n\n`;
 
             products.forEach((product, index) => {
-              const stockStatus = product.inventory && product.inventory > 0 ? "✅ In Stock" : "❌ Out of Stock";
+              const stockStatus = product.inventory_quantity && product.inventory_quantity > 0 ? "✅ In Stock" : "❌ Out of Stock";
               responseText += `${index + 1}. ${product.title}\n`;
               responseText += `   💰 PKR ${product.price?.toLocaleString()}\n`;
               responseText += `   ${stockStatus}\n\n`;
