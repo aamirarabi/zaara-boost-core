@@ -214,28 +214,68 @@ serve(async (req) => {
 
         // Execute tool functions
         if (functionName === "search_shop_catalog") {
-          // Map common keywords
-          let searchQuery = args.query.toLowerCase();
-          if (searchQuery.includes("headphone")) {
-            searchQuery = searchQuery.replace(/headphone[s]?/gi, "headset");
+          // Map common keywords to actual product terms
+          let searchTerms: string[] = [];
+          const query = args.query.toLowerCase();
+          
+          // Keyword mapping
+          if (query.includes("headphone") || query.includes("headset")) {
+            searchTerms.push("headset", "headphones");
+          } else if (query.includes("chair")) {
+            searchTerms.push("chair");
+          } else if (query.includes("mouse") || query.includes("mice")) {
+            searchTerms.push("mouse", "mice");
+          } else if (query.includes("keyboard")) {
+            searchTerms.push("keyboard");
+          } else if (query.includes("monitor") || query.includes("display")) {
+            searchTerms.push("monitor", "display");
+          } else {
+            searchTerms.push(query);
           }
+          
+          // Build OR condition for multiple search terms
+          let orConditions: string[] = [];
+          searchTerms.forEach(term => {
+            orConditions.push(`title.ilike.%${term}%`);
+            orConditions.push(`description.ilike.%${term}%`);
+            orConditions.push(`tags::text.ilike.%${term}%`);
+          });
           
           const { data: products } = await supabase
             .from("shopify_products")
             .select("*")
             .eq("status", "active")
-            .or(`title.ilike.%${searchQuery}%,tags::text.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
-            .limit(args.limit || 5);
+            .or(orConditions.join(","))
+            .order("inventory", { ascending: false })
+            .limit(10);
           
           if (products && products.length > 0) {
-            responseText += `\n\n🛍️ Found ${products.length} product(s):\n\n`;
-            products.forEach((p, i) => {
+            // Limit display to 5 products max for customers
+            const displayProducts = products.slice(0, 5);
+            responseText += `\n\nI found these products for you:\n\n`;
+            
+            displayProducts.forEach((p, i) => {
               responseText += `${i + 1}. ${p.title}\n`;
-              responseText += `   💵 PKR ${p.price?.toLocaleString()}\n`;
-              responseText += `   📦 Stock: ${p.inventory > 0 ? 'Available' : 'Out of Stock'}\n\n`;
+              responseText += `💰 PKR ${p.price?.toLocaleString()}\n`;
+              
+              // Show only "In Stock" or "Out of Stock" - NO quantities
+              if (p.inventory && p.inventory > 0) {
+                responseText += `✅ In Stock\n\n`;
+              } else {
+                responseText += `❌ Out of Stock\n\n`;
+              }
             });
+            
+            responseText += `Which one interests you? 😊`;
           } else {
-            responseText += `\n\nI couldn't find products matching "${args.query}". Could you describe what you're looking for? Or would you like to see our popular categories like gaming chairs, headsets, or keyboards?`;
+            responseText += `\n\nI couldn't find exact matches for "${args.query}".\n\n`;
+            responseText += `Let me show you our popular categories:\n`;
+            responseText += `🎮 Gaming Chairs\n`;
+            responseText += `🎧 Headsets & Headphones\n`;
+            responseText += `🖥️ Gaming Monitors\n`;
+            responseText += `⌨️ Keyboards & Mice\n`;
+            responseText += `🖱️ Gaming Accessories\n\n`;
+            responseText += `Which category would you like to explore?`;
           }
         } else if (functionName === "get_product_details") {
           const { data: product } = await supabase

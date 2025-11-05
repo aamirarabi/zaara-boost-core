@@ -3,23 +3,63 @@ import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, RefreshCw, Loader2 } from "lucide-react";
+import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
 const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    inStock: 0,
+    outOfStock: 0,
+    lowStock: 0,
+  });
 
   useEffect(() => {
     loadProducts();
+    loadStats();
   }, []);
 
   const loadProducts = async () => {
     const { data } = await supabase.from("shopify_products").select("*").order("title");
     if (data) setProducts(data);
+  };
+
+  const loadStats = async () => {
+    // Get total products
+    const { count: total } = await supabase
+      .from("shopify_products")
+      .select("*", { count: "exact", head: true });
+
+    // Get in-stock products (inventory > 0)
+    const { count: inStock } = await supabase
+      .from("shopify_products")
+      .select("*", { count: "exact", head: true })
+      .gt("inventory", 0);
+
+    // Get out-of-stock products (inventory = 0 or NULL)
+    const { count: outOfStock } = await supabase
+      .from("shopify_products")
+      .select("*", { count: "exact", head: true })
+      .or("inventory.eq.0,inventory.is.null");
+
+    // Get low-stock products (inventory > 0 AND inventory < 10)
+    const { count: lowStock } = await supabase
+      .from("shopify_products")
+      .select("*", { count: "exact", head: true })
+      .gt("inventory", 0)
+      .lt("inventory", 10);
+
+    setStats({
+      total: total || 0,
+      inStock: inStock || 0,
+      outOfStock: outOfStock || 0,
+      lowStock: lowStock || 0,
+    });
   };
 
   const syncProducts = async () => {
@@ -35,6 +75,7 @@ const Products = () => {
       } else {
         toast.success(`✅ Synced ${data.count} products!`);
         loadProducts();
+        loadStats();
       }
     } catch (error) {
       toast.error("Error syncing products");
@@ -68,6 +109,53 @@ const Products = () => {
               </>
             )}
           </Button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+              <Package className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground">Products</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">In Stock</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.inStock}</div>
+              <p className="text-xs text-muted-foreground">Available</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+              <XCircle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.outOfStock}</div>
+              <p className="text-xs text-muted-foreground">Unavailable</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Low Stock Alert</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.lowStock}</div>
+              <p className="text-xs text-muted-foreground">&lt; 10 items</p>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="relative">
