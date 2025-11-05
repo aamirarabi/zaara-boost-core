@@ -72,12 +72,15 @@ serve(async (req) => {
     }
 
     // Invoke process-zaara-message edge function
-    const { error: invokeError } = await supabase.functions.invoke("process-zaara-message", {
+    console.log("Calling process-zaara-message for:", phoneNumber);
+    const { data: processData, error: invokeError } = await supabase.functions.invoke("process-zaara-message", {
       body: { phone_number: phoneNumber, message: messageText, message_id: messageId },
     });
 
     if (invokeError) {
-      console.error("Error invoking process-zaara-message:", invokeError);
+      console.error("❌ Error invoking process-zaara-message:", invokeError);
+    } else {
+      console.log("✅ Successfully invoked process-zaara-message:", processData);
     }
 
     return new Response(JSON.stringify({ status: "success" }), {

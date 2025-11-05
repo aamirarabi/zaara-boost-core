@@ -196,9 +196,22 @@ serve(async (req) => {
     }
 
     // Send response via WhatsApp
-    await supabase.functions.invoke("send-whatsapp-message", {
+    console.log("📤 Sending WhatsApp message to:", phone_number);
+    console.log("📝 Message content:", responseText);
+    
+    const { data: sendData, error: sendError } = await supabase.functions.invoke("send-whatsapp-message", {
       body: { phone_number, message: responseText },
     });
+
+    if (sendError) {
+      console.error("❌ Failed to send WhatsApp message:", sendError);
+      return new Response(JSON.stringify({ error: "Failed to send message", details: sendError }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("✅ WhatsApp message sent successfully:", sendData);
 
     return new Response(JSON.stringify({ success: true, response: responseText }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
