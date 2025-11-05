@@ -33,6 +33,36 @@ function standardizePhone(phone: string): string | null {
 
 // Helper to transform and insert orders
 async function processBatch(supabaseClient: any, orders: any[]) {
+  // First, ensure all customers exist
+  const customersToUpsert = orders
+    .map((o) => {
+      const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
+      if (!customerPhone) return null;
+      
+      return {
+        phone_number: customerPhone,
+        name: o.customer?.first_name && o.customer?.last_name 
+          ? `${o.customer.first_name} ${o.customer.last_name}`
+          : o.shipping_address?.name || null,
+        email: o.customer?.email || o.contact_email,
+        synced_at: new Date().toISOString(),
+      };
+    })
+    .filter(Boolean);
+
+  // Upsert customers first
+  if (customersToUpsert.length > 0) {
+    const { error: customerError } = await supabaseClient
+      .from('customers')
+      .upsert(customersToUpsert, { onConflict: 'phone_number' });
+    
+    if (customerError) {
+      console.error('❌ Customer upsert error:', customerError);
+      throw customerError;
+    }
+    console.log(`✅ Upserted ${customersToUpsert.length} customers`);
+  }
+
   const ordersToUpsert = orders.map((o) => {
     const customerPhone = standardizePhone(o.customer?.phone || o.shipping_address?.phone);
     const fulfillments = o.fulfillments || [];
@@ -78,7 +108,11 @@ async function processBatch(supabaseClient: any, orders: any[]) {
     .from('shopify_orders')
     .upsert(ordersToUpsert, { onConflict: 'order_id' });
 
-  if (error) throw error;
+  if (error) {
+    console.error('❌ Order upsert error:', error);
+    throw error;
+  }
+  console.log(`✅ Upserted ${ordersToUpsert.length} orders`);
 }
 
 // Background sync function
