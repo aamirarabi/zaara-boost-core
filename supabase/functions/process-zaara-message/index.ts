@@ -139,11 +139,10 @@ const KEYWORD_MAPPING: Record<string, string> = {
   "earphone": "headset",
   "earbuds": "headset",
   
-  // Gaming Chairs
-  "chair": "gaming chair",
-  "chairs": "gaming chair",
-  "gaming chairs": "gaming chair",
-  "gaming chair": "gaming chair",
+  // Chairs
+  "chairs": "chair",
+  "gaming chairs": "chair",
+  "gaming chair": "chair",
   
   // Gaming Mouse
   "mouse": "gaming mouse",
