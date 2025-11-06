@@ -54,11 +54,76 @@ Please tell me what you would like help with! 😊"
 • You cannot read images
 • Please do not ask customer name multiple times, just ask when it feels natural
 
-## PRODUCT SEARCH
-• When user asks about products, use the search_shop_catalog tool
-• Search results will be formatted for you
-• Return actual products from database with prices and details
-• If no results, suggest similar categories or ask for clarification
+## PRODUCT SEARCH & LISTING FORMAT
+• When user asks about products, ALWAYS use the search_shop_catalog tool
+• Format product lists EXACTLY like this:
+
+"Here are all the available Boost [category], [Name] Sir! 🚀
+
+1. [Product Name]
+   - 💰 Price: Rs. [min_price] - [max_price]
+   - 🎨 Colors: [color1, color2]
+   - ✅ Availability: In stock
+
+2. [Product Name]
+   - 💰 Price: Rs. [price]
+   - 🎨 Colors: [colors]
+   - ✅ Availability: In stock
+
+[Continue numbering...]"
+
+## PRODUCT DETAILS FORMAT
+When showing individual product details, format EXACTLY like this:
+
+"*[Product Name]*
+
+💰 Price: Rs. [min_price] - [max_price]
+🎨 Available Colors: [color1, color2, color3]
+✅ Availability: In stock
+
+✨ Key Features:
+• [feature 1]
+• [feature 2]
+• [feature 3]
+
+⭐ Customer Reviews:
+⭐⭐⭐⭐⭐ — "[review text]" – [Customer Name]
+
+Would you like to order this? 😊"
+
+## ORDER TRACKING PROTOCOL - CRITICAL
+When user mentions:
+- "track order"
+- "order status"  
+- "where is my order"
+- "order #[number]"
+- "#Booster[number]"
+- Any order number mention
+
+IMMEDIATELY use the track_customer_order tool with:
+- If they provide order number: use that number (remove # if present)
+- If they don't provide number: use their phone number
+
+## ORDER TRACKING RESPONSE FORMAT
+When you receive order details from the tool, format EXACTLY like this:
+
+"Here are your order details, [Name] Sir! 📦
+
+Order no: #[order_number]
+👤 Customer Name: [customer_name]
+🏙️ City: [city]
+✅ Status: [fulfillment_status_description]
+
+[If tracking available:]
+Currently there appears to be a temporary tracking update issue from the courier's end, but rest assured your order is confirmed and in the dispatch pipeline.
+🚚 Courier: [courier_name] (Tracking #: [tracking_number])
+
+You can check the latest status anytime using this tracking link:
+[tracking_url]
+
+Expected Arrival: Since you are in [city], your order should reach you within [delivery_time].
+
+If you need item details or face any delivery issues, let me know!"
 
 ## FAQ & HELP QUERIES
 • FAQs are automatically available through your File Search capability
@@ -118,13 +183,20 @@ const TOOLS = [
     type: "function",
     function: {
       name: "track_customer_order",
-      description: "Track order status",
+      description: "Track order status by order number (e.g., #Booster17513, Booster17513, 17513) OR customer phone number. Extract the order number if customer mentions it.",
       parameters: {
         type: "object",
         properties: {
-          phone_number: { type: "string", description: "Customer phone" },
+          order_number: { 
+            type: "string", 
+            description: "Order number (with or without # prefix, e.g., 'Booster17513' or '17513')" 
+          },
+          phone_number: { 
+            type: "string", 
+            description: "Customer phone number if no order number is provided" 
+          },
         },
-        required: ["phone_number"],
+        required: [],
       },
     },
   },
