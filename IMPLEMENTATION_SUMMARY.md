@@ -20,7 +20,9 @@
 - Price-sorted results (cheapest first)
 
 ### 3. OpenAI Assistants API Integration
-- Using Assistant: `asst_R7YwCRjq1BYHqGehfR9RtDFo` (current)
+- Using Assistant: `asst_XD1YQeyvtzWIBKlFa0HNX9fZ` (**NEW - Production Custom Assistant**)
+- Model: `gpt-4o-2024-11-20`
+- Previous Assistant (backup): `asst_R7YwCRjq1BYHqGehfR9RtDFo`
 - Thread-based conversation management
 - Tool calling: search_shop_catalog, track_customer_order
 - Proper error handling
@@ -46,10 +48,12 @@
 - **Number Selection**: ✅ PASSING
 - **Tool Execution**: ✅ PASSING
 
-### Known Limitations (Due to Existing Assistant)
-- B2B contacts not in Assistant instructions
-- Greeting format differs from our prompt
-- FAQ search has some process errors
+### ✅ Custom Assistant Deployed (Nov 6, 2025)
+- **NEW**: Using custom `Boost Lifestyle Zaara - Production` Assistant
+- Model: `gpt-4o-2024-11-20` for superior reasoning
+- File Search enabled with FAQ vector store
+- All B2B contacts, greeting formats, and policies included
+- Production-ready with comprehensive instructions
 
 ---
 
