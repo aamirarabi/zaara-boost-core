@@ -130,36 +130,102 @@ const TOOLS = [
   },
 ];
 
-// Keyword mapping for common variations
+// Comprehensive keyword mapping for ALL Boost Lifestyle products
 const KEYWORD_MAPPING: Record<string, string> = {
-  // Headsets/Headphones
+  // Audio - Headsets/Headphones
   "headphones": "headset",
   "headphone": "headset",
-  "earphones": "headset",
+  "earphones": "headset", 
   "earphone": "headset",
-  "earbuds": "headset",
+  "headset": "headset",
+  "headsets": "headset",
+  "bluetooth headset": "Bluetooth Headset",
+  "bluetooth headsets": "Bluetooth Headset",
+  "wireless headset": "headset",
+  "wireless headsets": "headset",
+  "anc headset": "headset",
   
-  // Chairs
+  // Audio - Earbuds
+  "earbuds": "Earbuds",
+  "earbud": "Earbuds",
+  "wireless earbuds": "Earbuds",
+  "true wireless": "Earbuds",
+  
+  // Audio - Speakers
+  "speaker": "Speaker",
+  "speakers": "Speaker",
+  "bluetooth speaker": "Speaker",
+  
+  // Gaming Chairs
+  "chair": "chair",
   "chairs": "chair",
-  "gaming chairs": "chair",
   "gaming chair": "chair",
+  "gaming chairs": "chair",
+  "ergonomic chair": "chair",
+  "ergonomic chairs": "chair",
+  "office chair": "chair",
+  
+  // Gaming Tables
+  "table": "gaming table",
+  "tables": "gaming table",
+  "gaming table": "gaming table",
+  "gaming desk": "gaming table",
+  "desk": "gaming table",
   
   // Gaming Mouse
-  "mouse": "gaming mouse",
-  "mice": "gaming mouse",
-  "gaming mouse": "gaming mouse",
+  "mouse": "mouse",
+  "mice": "mouse",
+  "gaming mouse": "mouse",
+  "office mouse": "mouse",
   
-  // Gaming Keyboard
-  "keyboard": "gaming keyboard",
-  "keyboards": "gaming keyboard",
-  "gaming keyboard": "gaming keyboard",
+  // Monitors
+  "monitor": "monitor",
+  "monitors": "monitor",
+  "gaming monitor": "monitor",
+  "screen": "monitor",
+  "display": "monitor",
   
-  // Gaming Monitor
-  "monitor": "gaming monitor",
-  "monitors": "gaming monitor",
-  "gaming monitor": "gaming monitor",
-  "screen": "gaming monitor",
-  "display": "gaming monitor",
+  // Monitor Arms
+  "monitor arm": "monitor arm",
+  "monitor stand": "monitor arm",
+  
+  // PC Components
+  "pc case": "pc case",
+  "case": "pc case",
+  "enclosure": "pc case",
+  "cpu cooler": "CPU Cooler",
+  "cooler": "CPU Cooler",
+  "cooling": "CPU Cooler",
+  "fan": "Case Fan",
+  "fans": "Case Fan",
+  "case fan": "Case Fan",
+  "power supply": "power supply",
+  "psu": "power supply",
+  "core": "core",
+  
+  // Smart Watches
+  "watch": "smart watches",
+  "watches": "smart watches",
+  "smart watch": "smart watches",
+  "smartwatch": "smart watches",
+  "smart watches": "smart watches",
+  
+  // Power Banks
+  "power bank": "power bank",
+  "power banks": "power bank",
+  "portable charger": "power bank",
+  
+  // Computer Accessories
+  "accessories": "computer accessories",
+  "accessory": "computer accessories",
+  "computer accessories": "computer accessories",
+  "pc accessories": "computer accessories",
+  
+  // Combos
+  "combo": "combo",
+  "bundle": "combo",
+  "package": "combo",
+  "deal": "combo",
 };
 
 // Helper function to clean HTML for WhatsApp
@@ -187,18 +253,19 @@ function cleanHtmlForWhatsApp(html: string): string {
   return clean;
 }
 
-// Helper function to improve search query
+// Helper function to improve search query with comprehensive keyword mapping
 function improveSearchQuery(userQuery: string): string {
   const queryLower = userQuery.toLowerCase().trim();
   
-  // Check keyword mapping first
+  // Check keyword mapping first - exact match or contains
   for (const [key, value] of Object.entries(KEYWORD_MAPPING)) {
-    if (queryLower.includes(key)) {
+    if (queryLower === key || queryLower.includes(key)) {
       console.log(`🔄 Keyword mapping: "${userQuery}" → "${value}"`);
       return value;
     }
   }
   
+  // Return original query if no mapping found
   return userQuery;
 }
 
