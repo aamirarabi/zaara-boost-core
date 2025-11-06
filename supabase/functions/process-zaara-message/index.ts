@@ -459,9 +459,9 @@ serve(async (req) => {
       );
     }
 
-    // Reverting to old Assistant temporarily while verifying new one
-    const ASSISTANT_ID = "asst_R7YwCRjq1BYHqGehfR9RtDFo";
-    // New Assistant (needs verification): asst_XD1YQeyvtzWIBKlFa0HNX9fZ
+    // Using new Production Assistant with updated API key
+    const ASSISTANT_ID = "asst_XD1YQeyvtzWIBKlFa0HNX9fZ";
+    // Old Assistant (backup): asst_R7YwCRjq1BYHqGehfR9RtDFo
     console.log("🤖 Using OpenAI Assistants API with Assistant:", ASSISTANT_ID);
 
     // Step 1: Create a thread
