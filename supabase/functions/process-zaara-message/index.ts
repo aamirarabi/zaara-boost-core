@@ -459,9 +459,9 @@ serve(async (req) => {
       );
     }
 
-    // New Production Assistant with gpt-4o model (Nov 6, 2025)
-    const ASSISTANT_ID = "asst_XD1YQeyvtzWIBKlFa0HNX9fZ";
-    // Old Assistant (backup): asst_R7YwCRjq1BYHqGehfR9RtDFo
+    // Reverting to old Assistant temporarily while verifying new one
+    const ASSISTANT_ID = "asst_R7YwCRjq1BYHqGehfR9RtDFo";
+    // New Assistant (needs verification): asst_XD1YQeyvtzWIBKlFa0HNX9fZ
     console.log("🤖 Using OpenAI Assistants API with Assistant:", ASSISTANT_ID);
 
     // Step 1: Create a thread
