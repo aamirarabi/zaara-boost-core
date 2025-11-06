@@ -72,11 +72,12 @@ const TEST_CASES: TestCase[] = [
     cleanup: true
   },
   {
-    name: "TEST 5: FAQ Search - Product Videos",
+    name: "TEST 5: FAQ Search - Automatic File Search",
     phone_number: "923000000005",
-    message: "How can I watch product videos?",
+    message: "What is your warranty policy?",
     expected_behavior: {
-      should_contain: ["video", "YouTube"],
+      should_contain: ["warranty"],
+      should_not_contain: ["unable to respond", "I apologize"],
     },
     cleanup: true
   },

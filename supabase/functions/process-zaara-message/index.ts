@@ -61,10 +61,9 @@ Please tell me what you would like help with! 😊"
 • If no results, suggest similar categories or ask for clarification
 
 ## FAQ & HELP QUERIES
-• When user asks about policies, warranty, shipping, videos, or general questions, use the search_faqs tool
-• Questions like "How do I...", "Where can I find...", "What is your policy..." should trigger FAQ search
-• Use search_faqs for any non-product-specific informational questions
-• Always check FAQs before giving general answers about company policies
+• FAQs are automatically available through your File Search capability
+• Use your knowledge base to answer questions about policies, warranty, shipping, videos
+• If you don't find information in your files, guide customers to contact support
 
 ## CLOSING
 When the customer thanks you or ends the chat politely:
@@ -129,29 +128,39 @@ const TOOLS = [
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "search_faqs",
-      description: "Search FAQ database",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Search term" },
-        },
-        required: ["query"],
-      },
-    },
-  },
 ];
 
 // Keyword mapping for common variations
 const KEYWORD_MAPPING: Record<string, string> = {
+  // Headsets/Headphones
   "headphones": "headset",
   "headphone": "headset",
   "earphones": "headset",
   "earphone": "headset",
   "earbuds": "headset",
+  
+  // Gaming Chairs
+  "chair": "gaming chair",
+  "chairs": "gaming chair",
+  "gaming chairs": "gaming chair",
+  "gaming chair": "gaming chair",
+  
+  // Gaming Mouse
+  "mouse": "gaming mouse",
+  "mice": "gaming mouse",
+  "gaming mouse": "gaming mouse",
+  
+  // Gaming Keyboard
+  "keyboard": "gaming keyboard",
+  "keyboards": "gaming keyboard",
+  "gaming keyboard": "gaming keyboard",
+  
+  // Gaming Monitor
+  "monitor": "gaming monitor",
+  "monitors": "gaming monitor",
+  "gaming monitor": "gaming monitor",
+  "screen": "gaming monitor",
+  "display": "gaming monitor",
 };
 
 // Helper function to clean HTML for WhatsApp
@@ -211,9 +220,16 @@ async function sendWhatsAppImage(phone_number: string, imageUrl: string, caption
   const WHATSAPP_PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
   
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    console.error("WhatsApp credentials not configured");
-    return;
+    console.error("❌ WhatsApp credentials not configured");
+    throw new Error("WhatsApp credentials missing");
   }
+
+  if (!imageUrl || !imageUrl.startsWith("http")) {
+    console.error("❌ Invalid image URL:", imageUrl);
+    throw new Error(`Invalid image URL: ${imageUrl}`);
+  }
+
+  console.log(`📸 Sending image to ${phone_number}: ${imageUrl}`);
 
   try {
     const response = await fetch(
@@ -238,12 +254,16 @@ async function sendWhatsAppImage(phone_number: string, imageUrl: string, caption
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Failed to send WhatsApp image:", error);
-    } else {
-      console.log("✅ WhatsApp image sent successfully");
+      console.error("❌ WhatsApp API error:", response.status, error);
+      throw new Error(`WhatsApp API error: ${response.status}`);
     }
+    
+    const result = await response.json();
+    console.log("✅ WhatsApp image sent:", result);
+    return true;
   } catch (error) {
-    console.error("Error sending WhatsApp image:", error);
+    console.error("❌ Error sending image:", error);
+    throw error;
   }
 }
 
@@ -353,197 +373,324 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(10);
 
-    // Get settings (custom prompt)
+    // Get settings
     const { data: settings } = await supabase.from("system_settings").select("*");
-    const customPrompt = settings?.find((s) => s.setting_key === "zaara_system_prompt")?.setting_value;
     
-    const systemPrompt = customPrompt || DEFAULT_SYSTEM_PROMPT;
+    // Get OpenAI API key from settings
+    const openaiApiKey = settings?.find((s) => s.setting_key === "openai_api_key")?.setting_value;
 
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...(history || [])
-        .reverse()
-        .map((m) => ({
-          role: m.direction === "inbound" ? "user" : "assistant",
-          content: m.content,
-        })),
-      { role: "user", content: message }, // Add current user message
-    ];
-
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) {
-      console.error("LOVABLE_API_KEY not configured");
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!openaiApiKey) {
+      console.error("OpenAI API key not configured in settings");
+      return new Response(
+        JSON.stringify({ 
+          error: "AI not configured",
+          message: "Please add OpenAI API key in Settings" 
+        }), 
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Call Lovable AI Gateway with tools
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const ASSISTANT_ID = "asst_R7YwCRjq1BYHqGehfR9RtDFo";
+    console.log("🤖 Using OpenAI Assistants API with Assistant:", ASSISTANT_ID);
+
+    // Step 1: Create a thread
+    const threadResponse = await fetch("https://api.openai.com/v1/threads", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${lovableApiKey}`,
+        "Authorization": `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v2"
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-        tools: TOOLS,
-      }),
+        messages: [
+          {
+            role: "user",
+            content: message
+          }
+        ]
+      })
     });
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("❌ AI API error:", aiResponse.status, errorText);
-      return new Response(JSON.stringify({ error: "AI API error", details: errorText }), {
+    if (!threadResponse.ok) {
+      const error = await threadResponse.text();
+      console.error("❌ Thread creation failed:", error);
+      return new Response(JSON.stringify({ error: "Failed to create thread" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const aiResult = await aiResponse.json();
-    console.log("AI Response:", JSON.stringify(aiResult, null, 2));
-    
-    const choice = aiResult.choices?.[0];
-    let responseText = choice?.message?.content || "";
-    let toolExecuted = false;
+    const thread = await threadResponse.json();
+    const threadId = thread.id;
+    console.log("✅ Thread created:", threadId);
 
-    // Handle tool calls if present
-    if (choice?.message?.tool_calls) {
-      toolExecuted = true;
-      for (const toolCall of choice.message.tool_calls) {
-        const functionName = toolCall.function.name;
-        const args = JSON.parse(toolCall.function.arguments);
+    // Step 2: Run the assistant with our custom tools
+    const runResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v2"
+      },
+      body: JSON.stringify({
+        assistant_id: ASSISTANT_ID,
+        tools: TOOLS,
+        tool_choice: "auto"
+      })
+    });
 
-        console.log("Tool call:", functionName, args);
+    if (!runResponse.ok) {
+      const error = await runResponse.text();
+      console.error("❌ Run creation failed:", error);
+      return new Response(JSON.stringify({ error: "Failed to run assistant" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-        // Execute tool functions
-        if (functionName === "search_shop_catalog") {
-          // Clean search term
-          const originalQuery = args.query.trim();
+    const run = await runResponse.json();
+    let runId = run.id;
+    console.log("✅ Run started:", runId);
 
-          console.log(`🔍 Original query: "${originalQuery}"`);
+    // Step 3: Poll for completion
+    let runStatus = run.status;
+    let attempts = 0;
+    const maxAttempts = 30;
 
-          // Apply keyword mapping
-          const improvedQuery = improveSearchQuery(originalQuery);
-          const searchTerm = improvedQuery.toLowerCase();
+    while (runStatus === "queued" || runStatus === "in_progress") {
+      if (attempts >= maxAttempts) {
+        console.error("❌ Run timeout");
+        return new Response(JSON.stringify({ error: "Assistant timeout" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-          console.log(`🔍 Searching for: "${searchTerm}"`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
 
-          // Search products in database - case-insensitive search across title, description, and tags
-          const { data: products, error: searchError } = await supabase
-            .from("shopify_products")
-            .select("*")
-            .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
-            .gt("inventory", 0) // Only in-stock products
-            .order("price", { ascending: true }) // Sort by price: cheapest first
-            .limit(10);
-
-          if (searchError) {
-            console.error("❌ Product search error:", searchError);
-            responseText += `\n\nI'm having trouble searching products right now. Please try again! 😊`;
-          } else if (products && products.length > 0) {
-            console.log(`✅ Found ${products.length} products`);
-
-            // Store product list in conversation context for number selection
-            await supabase
-              .from("conversation_context")
-              .upsert({
-                phone_number,
-                last_product_list: products.map(p => ({ product_id: p.product_id, title: p.title })),
-                updated_at: new Date().toISOString()
-              });
-
-            // Get customer name for personalization
-            const customerName = await getCustomerName(supabase, phone_number);
-            const greeting = customerName ? `${customerName} Sir` : "you";
-
-            // Show ALL products found (clean format)
-            responseText = `I found these products for ${greeting}:\n\n`;
-
-            products.forEach((product, index) => {
-              responseText += `${index + 1}. ${product.title}\n`;
-              responseText += `   💰 PKR ${product.price?.toLocaleString()}\n`;
-              responseText += `   ✅ In Stock\n\n`;
-            });
-
-            responseText += `Reply with the number to see details! 😊`;
-          } else {
-            console.log(`⚠️ No products found for: "${searchTerm}"`);
-            responseText += `\n\nI couldn't find exact matches for "${args.query}".\n\n`;
-            responseText += `Let me show you our popular categories:\n`;
-            responseText += `🎮 Gaming Chairs\n`;
-            responseText += `🎧 Headsets & Headphones\n`;
-            responseText += `🖥️ Gaming Monitors\n`;
-            responseText += `⌨️ Keyboards & Mice\n`;
-            responseText += `🖱️ Gaming Accessories\n\n`;
-            responseText += `Which category would you like to explore?`;
-          }
-        } else if (functionName === "get_product_details") {
-          const { data: product } = await supabase
-            .from("shopify_products")
-            .select("*")
-            .eq("product_id", args.product_id)
-            .single();
-          
-          if (product) {
-            responseText += `\n\n📦 ${product.title}\n💵 PKR ${product.price?.toLocaleString()}`;
-          }
-        } else if (functionName === "track_customer_order") {
-          const { data: orders } = await supabase
-            .from("shopify_orders")
-            .select("*")
-            .eq("customer_phone", args.phone_number)
-            .order("created_at", { ascending: false })
-            .limit(1);
-          
-          if (orders && orders.length > 0) {
-            const order = orders[0];
-            responseText += `\n\n📦 Order #${order.order_number}\n✅ Status: ${order.fulfillment_status}\n🚚 Courier: ${order.courier_name || "TBA"}`;
-          }
-        } else if (functionName === "search_faqs") {
-          const { data: faqs, error: faqError } = await supabase
-            .rpc("search_faqs", { search_term: args.query, result_limit: 3 });
-          
-          console.log("FAQ Search Results:", faqs);
-          
-          if (faqs && faqs.length > 0) {
-            // Include question and answer for context
-            responseText += `\n\n${faqs[0].question}\n\n${faqs[0].answer}`;
-          } else {
-            responseText += "\n\nI couldn't find specific information about that. Please contact our support team at +92 303 8981133 for detailed assistance.";
+      const statusResponse = await fetch(
+        `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${openaiApiKey}`,
+            "OpenAI-Beta": "assistants=v2"
           }
         }
+      );
+
+      const statusData = await statusResponse.json();
+      runStatus = statusData.status;
+      console.log(`🔄 Run status: ${runStatus} (attempt ${attempts})`);
+
+      if (runStatus === "requires_action") {
+        console.log("🛠️ Tools required by assistant");
+        
+        const toolCalls = statusData.required_action?.submit_tool_outputs?.tool_calls || [];
+        const toolOutputs = [];
+
+        for (const toolCall of toolCalls) {
+          const functionName = toolCall.function.name;
+          const args = JSON.parse(toolCall.function.arguments);
+          
+          console.log(`🔧 Executing tool: ${functionName}`, args);
+
+          let output = "";
+
+          if (functionName === "search_shop_catalog") {
+            const originalQuery = args.query.trim();
+            const improvedQuery = improveSearchQuery(originalQuery);
+            const searchTerm = improvedQuery.toLowerCase();
+            
+            console.log(`🔍 Searching for: "${searchTerm}"`);
+            
+            const { data: products, error: searchError } = await supabase
+              .from("shopify_products")
+              .select("*")
+              .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
+              .gt("inventory", 0)
+              .order("price", { ascending: true })
+              .limit(10);
+            
+            if (searchError || !products || products.length === 0) {
+              output = JSON.stringify({ 
+                found: false, 
+                message: `No products found for "${originalQuery}"` 
+              });
+            } else {
+              console.log(`✅ Found ${products.length} products`);
+              
+              await supabase
+                .from("conversation_context")
+                .upsert({
+                  phone_number: phone_number,
+                  last_product_list: products.map(p => ({ 
+                    product_id: p.product_id, 
+                    title: p.title 
+                  })),
+                }, { onConflict: "phone_number" });
+              
+              output = JSON.stringify({
+                found: true,
+                count: products.length,
+                products: products.map((p, i) => ({
+                  number: i + 1,
+                  title: p.title,
+                  price: p.price,
+                  in_stock: true
+                }))
+              });
+            }
+          }
+          else if (functionName === "get_product_details") {
+            const { data: product } = await supabase
+              .from("shopify_products")
+              .select("*")
+              .eq("product_id", args.product_id)
+              .single();
+            
+            if (product) {
+              output = JSON.stringify({
+                found: true,
+                title: product.title,
+                price: product.price,
+                description: cleanHtmlForWhatsApp(product.description || "")
+              });
+            } else {
+              output = JSON.stringify({
+                found: false,
+                message: "Product not found"
+              });
+            }
+          }
+          else if (functionName === "track_customer_order") {
+            const { data: orders } = await supabase
+              .from("shopify_orders")
+              .select("*")
+              .eq("customer_phone", args.phone_number)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            
+            if (orders && orders.length > 0) {
+              const order = orders[0];
+              output = JSON.stringify({
+                found: true,
+                order_number: order.order_number,
+                status: order.fulfillment_status,
+                courier: order.courier_name || "TBA"
+              });
+            } else {
+              output = JSON.stringify({
+                found: false,
+                message: "No orders found for this phone number"
+              });
+            }
+          }
+
+          toolOutputs.push({
+            tool_call_id: toolCall.id,
+            output: output
+          });
+        }
+
+        const submitResponse = await fetch(
+          `https://api.openai.com/v1/threads/${threadId}/runs/${runId}/submit_tool_outputs`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openaiApiKey}`,
+              "Content-Type": "application/json",
+              "OpenAI-Beta": "assistants=v2"
+            },
+            body: JSON.stringify({ tool_outputs: toolOutputs })
+          }
+        );
+
+        if (!submitResponse.ok) {
+          console.error("❌ Tool output submission failed");
+          break;
+        }
+
+        console.log("✅ Tool outputs submitted");
+        runStatus = "in_progress";
       }
     }
 
-    // Only use fallback error message if no tool was executed and no response text
-    if (!toolExecuted && !responseText) {
-      responseText = "I apologize, I'm unable to respond right now.";
+    if (runStatus === "completed") {
+      console.log("✅ Run completed successfully");
+      
+      const messagesResponse = await fetch(
+        `https://api.openai.com/v1/threads/${threadId}/messages`,
+        {
+          headers: {
+            "Authorization": `Bearer ${openaiApiKey}`,
+            "OpenAI-Beta": "assistants=v2"
+          }
+        }
+      );
+
+      const messagesData = await messagesResponse.json();
+      const assistantMessages = messagesData.data.filter(
+        (msg: any) => msg.role === "assistant"
+      );
+
+      if (assistantMessages.length > 0) {
+        const lastMessage = assistantMessages[0];
+        const textContent = lastMessage.content.find((c: any) => c.type === "text");
+        
+        if (textContent) {
+          const responseText = textContent.text.value;
+          console.log("📝 Assistant response:", responseText);
+
+          const { data: sendData, error: sendError } = await supabase.functions.invoke(
+            "send-whatsapp-message", 
+            {
+              body: { phone_number, message: responseText },
+            }
+          );
+
+          if (sendError) {
+            console.error("❌ Failed to send WhatsApp message:", sendError);
+            return new Response(
+              JSON.stringify({ error: "Failed to send message" }), 
+              {
+                status: 500,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          console.log("✅ WhatsApp message sent successfully");
+
+          return new Response(
+            JSON.stringify({ success: true, response: responseText }), 
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+      }
+    } else {
+      console.error("❌ Run failed with status:", runStatus);
+      return new Response(
+        JSON.stringify({ error: `Assistant run failed: ${runStatus}` }), 
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Send response via WhatsApp
-    console.log("📤 Sending WhatsApp message to:", phone_number);
-    console.log("📝 Message content:", responseText);
-    
-    const { data: sendData, error: sendError } = await supabase.functions.invoke("send-whatsapp-message", {
-      body: { phone_number, message: responseText },
-    });
-
-    if (sendError) {
-      console.error("❌ Failed to send WhatsApp message:", sendError);
-      return new Response(JSON.stringify({ error: "Failed to send message", details: sendError }), {
+    return new Response(
+      JSON.stringify({ error: "No response from assistant" }), 
+      {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    console.log("✅ WhatsApp message sent successfully:", sendData);
-
-    return new Response(JSON.stringify({ success: true, response: responseText }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      }
+    );
   } catch (error) {
     console.error("Process Zaara error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
