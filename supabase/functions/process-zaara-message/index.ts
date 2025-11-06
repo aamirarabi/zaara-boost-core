@@ -281,9 +281,18 @@ async function getCustomerName(supabase: any, phone_number: string): Promise<str
 }
 
 // Send WhatsApp image
-async function sendWhatsAppImage(phone_number: string, imageUrl: string, caption: string) {
-  const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-  const WHATSAPP_PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+async function sendWhatsAppImage(supabase: any, phone_number: string, imageUrl: string, caption: string) {
+  console.log("🖼️ sendWhatsAppImage called with supabase type:", typeof supabase);
+  console.log("🖼️ supabase.from exists?", typeof supabase.from);
+  
+  // Get WhatsApp credentials from database
+  const { data: settings } = await supabase.from("system_settings").select("*");
+  
+  const WHATSAPP_TOKEN = settings?.find((s: any) => s.setting_key === "whatsapp_access_token")?.setting_value;
+  const WHATSAPP_PHONE_ID = settings?.find((s: any) => s.setting_key === "whatsapp_phone_id")?.setting_value;
+  
+  console.log("🔑 WhatsApp Token found:", WHATSAPP_TOKEN ? "✅" : "❌");
+  console.log("🔑 WhatsApp Phone ID found:", WHATSAPP_PHONE_ID ? "✅" : "❌");
   
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
     console.error("❌ WhatsApp credentials not configured");
@@ -416,7 +425,7 @@ serve(async (req) => {
           // Send product image FIRST
           const images = JSON.parse(product.images || "[]");
           if (images.length > 0) {
-            await sendWhatsAppImage(phone_number, images[0], product.title);
+            await sendWhatsAppImage(supabase, phone_number, images[0], product.title);
           }
           
           // Send details text AFTER image
