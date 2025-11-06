@@ -96,13 +96,15 @@ When user mentions:
 - "track order"
 - "order status"  
 - "where is my order"
+- "track my order"
 - "order #[number]"
 - "#Booster[number]"
 - Any order number mention
 
-IMMEDIATELY use the track_customer_order tool with:
-- If they provide order number: use that number (remove # if present)
-- If they don't provide number: use their phone number
+IMPORTANT: 
+- If customer says "track my order" WITHOUT providing an order number, AUTOMATICALLY use their phone_number parameter from the conversation to call track_customer_order tool
+- If customer provides an order number (e.g., "order 17512", "#Booster17513"), use that order number to call track_customer_order tool
+- NEVER ask for phone number - you already have it from the conversation context
 
 ## ORDER TRACKING RESPONSE FORMAT
 When you receive order details from the tool, format EXACTLY like this:
@@ -126,9 +128,10 @@ Expected Arrival: Since you are in [city], your order should reach you within [d
 If you need item details or face any delivery issues, let me know!"
 
 ## FAQ & HELP QUERIES
-• FAQs are automatically available through your File Search capability
-• Use your knowledge base to answer questions about policies, warranty, shipping, videos
-• If you don't find information in your files, guide customers to contact support
+• When customer asks about policies, warranty, locations, shipping, returns, or any company information, ALWAYS use the search_faqs tool first
+• The FAQs database has comprehensive answers to common questions
+• Format FAQ responses naturally and include any videos or images mentioned in the FAQ
+• If FAQ not found, guide customers to contact support
 
 ## CLOSING
 When the customer thanks you or ends the chat politely:
@@ -183,20 +186,37 @@ const TOOLS = [
     type: "function",
     function: {
       name: "track_customer_order",
-      description: "Track order status by order number (e.g., #Booster17513, Booster17513, 17513) OR customer phone number. Extract the order number if customer mentions it.",
+      description: "Track order status by order number (e.g., #Booster17513, Booster17513, 17513) OR customer phone number. If customer says 'track my order' without order number, use their phone number from the conversation.",
       parameters: {
         type: "object",
         properties: {
           order_number: { 
             type: "string", 
-            description: "Order number (with or without # prefix, e.g., 'Booster17513' or '17513')" 
+            description: "Order number if customer mentions it (with or without # prefix, e.g., 'Booster17513' or '17513')" 
           },
           phone_number: { 
             type: "string", 
-            description: "Customer phone number if no order number is provided" 
+            description: "Customer phone number - use this when customer says 'track my order' without providing order number" 
           },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_faqs",
+      description: "Search FAQ database for questions about policies, warranty, locations, shipping, returns, etc. Use this when customer asks about company information or policies.",
+      parameters: {
+        type: "object",
+        properties: {
+          search_term: { 
+            type: "string", 
+            description: "Search term from customer question (e.g., 'warranty', 'location', 'shipping', 'return')" 
+          },
+        },
+        required: ["search_term"],
       },
     },
   },
@@ -716,25 +736,88 @@ serve(async (req) => {
             }
           }
           else if (functionName === "track_customer_order") {
-            const { data: orders } = await supabase
-              .from("shopify_orders")
-              .select("*")
-              .eq("customer_phone", args.phone_number)
-              .order("created_at", { ascending: false })
-              .limit(1);
+            let orders = [];
+            
+            // If order_number is provided, search by order number
+            if (args.order_number) {
+              const orderNum = args.order_number.toString().replace('#', '').replace('Booster', '');
+              console.log(`🔍 Searching for order number: ${orderNum}`);
+              
+              const { data: ordersByNumber } = await supabase
+                .from("shopify_orders")
+                .select("*")
+                .or(`order_number.ilike.%${orderNum}%,order_number.ilike.%Booster${orderNum}%,order_number.ilike.%#Booster${orderNum}%`)
+                .limit(1);
+              
+              orders = ordersByNumber || [];
+            }
+            // If phone_number is provided and no order found yet, search by phone
+            else if (args.phone_number) {
+              console.log(`🔍 Searching for orders by phone: ${args.phone_number}`);
+              
+              const { data: ordersByPhone } = await supabase
+                .from("shopify_orders")
+                .select("*")
+                .eq("customer_phone", args.phone_number)
+                .order("created_at", { ascending: false })
+                .limit(1);
+              
+              orders = ordersByPhone || [];
+            }
             
             if (orders && orders.length > 0) {
               const order = orders[0];
+              const shippingAddr = order.shipping_address || {};
+              const city = shippingAddr.city || "your city";
+              
               output = JSON.stringify({
                 found: true,
                 order_number: order.order_number,
-                status: order.fulfillment_status,
-                courier: order.courier_name || "TBA"
+                customer_name: order.customer_name || "Customer",
+                city: city,
+                fulfillment_status: order.fulfillment_status || "Processing",
+                courier_name: order.courier_name || null,
+                tracking_number: order.tracking_number || null,
+                tracking_url: order.tracking_url || null,
+                financial_status: order.financial_status,
+                total_price: order.total_price,
+                line_items: order.line_items
               });
             } else {
               output = JSON.stringify({
                 found: false,
-                message: "No orders found for this phone number"
+                message: args.order_number 
+                  ? `No order found with number ${args.order_number}` 
+                  : "No orders found for this phone number"
+              });
+            }
+          }
+          else if (functionName === "search_faqs") {
+            const searchTerm = args.search_term.toLowerCase();
+            console.log(`🔍 Searching FAQs for: "${searchTerm}"`);
+            
+            const { data: faqs } = await supabase
+              .rpc('search_faqs', { 
+                search_term: searchTerm,
+                result_limit: 3 
+              });
+            
+            if (faqs && faqs.length > 0) {
+              output = JSON.stringify({
+                found: true,
+                count: faqs.length,
+                faqs: faqs.map((faq: any) => ({
+                  question: faq.question,
+                  answer: faq.answer,
+                  category: faq.category,
+                  video_urls: faq.video_urls,
+                  image_urls: faq.image_urls
+                }))
+              });
+            } else {
+              output = JSON.stringify({
+                found: false,
+                message: `No FAQ found for "${searchTerm}"`
               });
             }
           }
