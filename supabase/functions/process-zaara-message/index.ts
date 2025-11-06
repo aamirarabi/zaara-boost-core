@@ -320,6 +320,12 @@ const KEYWORD_MAPPING: Record<string, string> = {
   "deal": "combo",
 };
 
+// Helper function to normalize phone numbers (remove +, spaces, dashes)
+function normalizePhoneNumber(phone: string): string {
+  if (!phone) return "";
+  return phone.replace(/[\s\-\+]/g, "").trim();
+}
+
 // Helper function to clean HTML for WhatsApp
 function cleanHtmlForWhatsApp(html: string): string {
   if (!html) return "";
@@ -740,7 +746,7 @@ serve(async (req) => {
             
             // If order_number is provided, search by order number
             if (args.order_number) {
-              const orderNum = args.order_number.toString().replace('#', '').replace('Booster', '');
+              const orderNum = args.order_number.toString().replace(/[#\s]/g, '').replace('Booster', '');
               console.log(`🔍 Searching for order number: ${orderNum}`);
               
               const { data: ordersByNumber } = await supabase
@@ -750,19 +756,39 @@ serve(async (req) => {
                 .limit(1);
               
               orders = ordersByNumber || [];
+              console.log(`📦 Found ${orders?.length || 0} orders by order number`);
             }
+            
             // If phone_number is provided and no order found yet, search by phone
-            else if (args.phone_number) {
-              console.log(`🔍 Searching for orders by phone: ${args.phone_number}`);
+            if ((!orders || orders.length === 0) && args.phone_number) {
+              const normalizedPhone = normalizePhoneNumber(args.phone_number);
+              console.log(`🔍 Searching for orders by phone: ${normalizedPhone}`);
               
               const { data: ordersByPhone } = await supabase
                 .from("shopify_orders")
                 .select("*")
-                .eq("customer_phone", args.phone_number)
+                .or(`customer_phone.eq.${normalizedPhone},customer_phone.eq.+${normalizedPhone}`)
                 .order("created_at", { ascending: false })
                 .limit(1);
               
               orders = ordersByPhone || [];
+              console.log(`📦 Found ${orders?.length || 0} orders by phone`);
+            }
+            
+            // If still no orders found and we have the incoming phone_number, try that
+            if ((!orders || orders.length === 0) && phone_number) {
+              const normalizedPhone = normalizePhoneNumber(phone_number);
+              console.log(`🔍 Searching for orders by conversation phone: ${normalizedPhone}`);
+              
+              const { data: ordersByPhone } = await supabase
+                .from("shopify_orders")
+                .select("*")
+                .or(`customer_phone.eq.${normalizedPhone},customer_phone.eq.+${normalizedPhone}`)
+                .order("created_at", { ascending: false })
+                .limit(1);
+              
+              orders = ordersByPhone || [];
+              console.log(`📦 Found ${orders?.length || 0} orders by conversation phone`);
             }
             
             if (orders && orders.length > 0) {
