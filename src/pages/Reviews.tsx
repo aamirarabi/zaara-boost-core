@@ -90,7 +90,7 @@ const Reviews = () => {
       });
     } else {
       toast("Sync Complete", {
-        description: `Synced ${data.synced_reviews} reviews for ${data.products_updated} products`,
+        description: `Synced ${data.total_reviews_synced} reviews for ${data.products_updated} products`,
       });
       loadData();
     }

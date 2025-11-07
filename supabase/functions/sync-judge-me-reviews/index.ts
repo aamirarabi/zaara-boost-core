@@ -27,32 +27,65 @@ serve(async (req) => {
 
     console.log('🔄 Starting Judge.me reviews sync...');
 
-    // Fetch reviews from Judge.me API
-    const reviewsResponse = await fetch(
-      `https://judge.me/api/v1/reviews?shop_domain=${JUDGE_ME_SHOP_DOMAIN}&api_token=${JUDGE_ME_API_TOKEN}&per_page=250`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      }
-    );
+    // Fetch ALL reviews with pagination
+    const allReviews = [];
+    let currentPage = 1;
+    let totalPages = 1;
 
-    if (!reviewsResponse.ok) {
-      const errorText = await reviewsResponse.text();
-      throw new Error(`Judge.me API error: ${reviewsResponse.status} - ${errorText}. Check your API token and shop domain.`);
+    while (currentPage <= totalPages) {
+      console.log(`📄 Fetching page ${currentPage} of ${totalPages}...`);
+      
+      const reviewsResponse = await fetch(
+        `https://judge.me/api/v1/reviews?shop_domain=${JUDGE_ME_SHOP_DOMAIN}&api_token=${JUDGE_ME_API_TOKEN}&page=${currentPage}&per_page=50`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (!reviewsResponse.ok) {
+        const errorText = await reviewsResponse.text();
+        const status = reviewsResponse.status;
+        
+        if (status === 401) {
+          throw new Error('Invalid Judge.me API token. Please check your JUDGE_ME_API_TOKEN secret.');
+        }
+        if (status === 404) {
+          throw new Error('Shop not found in Judge.me. Please verify JUDGE_ME_SHOP_DOMAIN is correct.');
+        }
+        if (status === 429) {
+          throw new Error('Rate limit exceeded. Please try again in a few minutes.');
+        }
+        
+        throw new Error(`Judge.me API error: ${status} - ${errorText}`);
+      }
+
+      const reviewsData = await reviewsResponse.json();
+      
+      if (reviewsData.reviews && reviewsData.reviews.length > 0) {
+        allReviews.push(...reviewsData.reviews);
+      }
+      
+      if (reviewsData.meta) {
+        totalPages = reviewsData.meta.total_pages || 1;
+        console.log(`📊 Page ${currentPage}/${totalPages}: Found ${reviewsData.reviews?.length || 0} reviews`);
+      }
+      
+      currentPage++;
     }
 
-    const reviewsData = await reviewsResponse.json();
-    console.log(`📊 Found ${reviewsData.reviews?.length || 0} reviews from Judge.me`);
+    console.log(`✅ Total reviews fetched: ${allReviews.length}`);
 
-    if (!reviewsData.reviews || reviewsData.reviews.length === 0) {
+    if (allReviews.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
           message: 'No reviews found in Judge.me. If you have reviews, check your API token permissions.',
-          synced_reviews: 0,
-          products_updated: 0
+          total_reviews_synced: 0,
+          products_updated: 0,
+          timestamp: new Date().toISOString()
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -64,7 +97,7 @@ serve(async (req) => {
     const reviewsByProduct: { [key: string]: any[] } = {};
 
     // Process each review
-    for (const review of reviewsData.reviews) {
+    for (const review of allReviews) {
       const productId = review.product_external_id;
       
       if (!productId) {
@@ -152,8 +185,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        synced_reviews: syncedCount,
-        products_updated: Object.keys(reviewsByProduct).length
+        total_reviews_synced: syncedCount,
+        products_updated: Object.keys(reviewsByProduct).length,
+        timestamp: new Date().toISOString()
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
