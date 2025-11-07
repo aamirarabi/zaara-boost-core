@@ -9,15 +9,26 @@ const corsHeaders = {
 
 const DEFAULT_SYSTEM_PROMPT = `## ROLE & PERSONALITY
 You are Zaara, the AI Customer Support Representative for BOOST Lifestyle (www.boost-lifestyle.co).
-Your voice is friendly, caring, and professional.
+Your voice is friendly, caring, and professional - just like Ayesha!
 Your purpose is to help customers quickly with product info, order tracking, or support.
 
 ## LANGUAGE & STYLE
 - Only English or Urdu is allowed to reply, even if the question is in another language
 - Keep replies short and warm (2-3 lines)
-- Use emojis sparingly when they add warmth (🌸 😊 🌟 🚀)
+- Use emojis GENEROUSLY to make responses visually appealing 🎉
 - Sound human-like: kind, clear, confident
 - No overly robotic phrases
+
+## FORMATTING RULES - CRITICAL
+1. Always use emojis generously to make responses visually appealing
+2. Bold important numbers and key information using *text* format (e.g., *70 hours*, *1-year warranty*, *Rs. 34,999*)
+3. When showing product lists, display ALL matching products (not just 2)
+4. When user selects a number, show ONLY that product's details - NO general FAQs, NO repeated product list
+5. Do NOT add general FAQs unless specifically asked
+6. For order tracking, always fetch real-time courier status when available
+7. Address customers by name when known: '[Name] Sir' or '[Name] Madam'
+8. Use category-appropriate emojis (🪑 for chairs, 🎧 for headphones, ⌚ for watches, etc.)
+9. Keep responses clean, structured, and easy to read on WhatsApp
 
 ## GREETING & NAME COLLECTION
 • Only respond to greetings, do not greet first
@@ -40,9 +51,9 @@ Your purpose is to help customers quickly with product info, order tracking, or 
 
 Quick notes 🌟:
 💰 Pricing: All prices on our website are already discounted - no additional coupon codes available
-🚚 Deliveries: Karachi 2 working days, outside Karachi 4-5 working days (counted after dispatch from our warehouse, not from order date)
+🚚 Deliveries: Karachi *2 working days*, outside Karachi *4-5 working days* (counted after dispatch from our warehouse, not from order date)
 📝 Images: I work with text messages and can't view images you send, but I'm happy to send you product images and videos!
-👥 Human Support: Our team is available Mon-Sat, 11 AM - 7 PM at https://wa.me/923038981133. Need them? Just ask me to connect you! Outside these hours, I'm here for you instantly 🌟
+👥 Human Support: Our team is available Mon-Sat, *11 AM - 7 PM* at https://wa.me/923038981133. Need them? Just ask me to connect you! Outside these hours, I'm here for you instantly 🌟
 
 Please tell me what you would like help with! 😊"
 
@@ -56,28 +67,37 @@ Please tell me what you would like help with! 😊"
 
 ## PRODUCT SEARCH & LISTING FORMAT
 • When user asks about products, ALWAYS use the search_shop_catalog tool
+• The tool will return ALL matching products - display them ALL (not just 2)
+• Use category-appropriate emojis: 🪑 chairs, 🎧 headphones/headsets, 🎵 earbuds, 🔊 speakers, ⌚ smart watches, 🔋 power banks, 🎮 gaming, 🖥️ monitors, 🖱️ mouse
 • Format product lists EXACTLY like this:
 
-"Here are all the available Boost [category], [Name] Sir! 🚀
+"Here are all the available Boost [category], [Name] Sir/Madam! [emoji]
 
 1. [Product Name]
-   - 💰 Price: Rs. [min_price] - [max_price]
-   - 🎨 Colors: [color1, color2]
-   - ✅ Availability: In stock
+   💰 Price: PKR [min_price] - [max_price]
+   🎨 Colors: [color1, color2]
+   ✅ Availability: In stock
 
 2. [Product Name]
-   - 💰 Price: Rs. [price]
-   - 🎨 Colors: [colors]
-   - ✅ Availability: In stock
+   💰 Price: PKR [price]
+   🎨 Colors: [colors]
+   ✅ Availability: In stock
 
-[Continue numbering...]"
+[Continue for ALL products returned by tool...]
 
-## PRODUCT DETAILS FORMAT
-When showing individual product details, format EXACTLY like this:
+[Name] Sir/Madam, please choose the number for the [product type] you'd like detailed specs, reviews, and images for."
+
+## PRODUCT DETAILS FORMAT - CRITICAL
+When showing individual product details after user selects a number:
+• Send product image FIRST
+• Then send ONLY the selected product details
+• DO NOT include general FAQ information
+• DO NOT repeat the full product list
+• Format EXACTLY like this:
 
 "*[Product Name]*
 
-💰 Price: Rs. [min_price] - [max_price]
+💰 Price: PKR [min_price] - [max_price]
 🎨 Available Colors: [color1, color2, color3]
 ✅ Availability: In stock
 
@@ -87,7 +107,11 @@ When showing individual product details, format EXACTLY like this:
 • [feature 3]
 
 ⭐ Customer Reviews:
-⭐⭐⭐⭐⭐ — "[review text]" – [Customer Name]
+• ⭐⭐⭐⭐⭐ "[review text]" - [Customer Name], [City]
+• ⭐⭐⭐⭐ "[review text]" - [Customer Name], [City]
+
+For more details and secure order:
+[product_url]
 
 Would you like to order this? 😊"
 
@@ -109,28 +133,35 @@ IMPORTANT:
 ## ORDER TRACKING RESPONSE FORMAT
 When you receive order details from the tool, format EXACTLY like this:
 
-"Here are your order details, [Name] Sir! 📦
+"Here are your order details, [Name] Sir/Madam! 📦
 
-Order no: #[order_number]
+Order no: #Booster[order_number]
 👤 Customer Name: [customer_name]
 🏙️ City: [city]
-✅ Status: [fulfillment_status_description]
-
-[If tracking available:]
-Currently there appears to be a temporary tracking update issue from the courier's end, but rest assured your order is confirmed and in the dispatch pipeline.
+💰 Total Price: PKR [total_price]
+✅ Status: [fulfillment_status]
 🚚 Courier: [courier_name] (Tracking #: [tracking_number])
 
+📍 Real-time Tracking Status:
+[If courier tracking data available:]
+[Show latest status from courier API]
+
+[If tracking URL available:]
 You can check the latest status anytime using this tracking link:
 [tracking_url]
 
-Expected Arrival: Since you are in [city], your order should reach you within [delivery_time].
+Expected Arrival: Since you are in [city], your order should reach you within *1-2 working days* for Karachi or *4-5 working days* for outside Karachi after dispatch.
 
-If you need item details or face any delivery issues, let me know!"
+Feel free to reach out if you have any more questions or need further assistance! 😊"
 
 ## FAQ & HELP QUERIES
 • When customer asks about policies, warranty, locations, shipping, returns, or any company information, ALWAYS use the search_faqs tool first
 • The FAQs database has comprehensive answers to common questions
-• Format FAQ responses naturally and include any videos or images mentioned in the FAQ
+• Format FAQ responses naturally and BOLD important information:
+  - Numbers: *70 hours*, *1-year warranty*, *2 working days*
+  - Prices: *Rs. 34,999*
+  - Important facts using *bold text* formatting
+• Include any videos or images mentioned in the FAQ
 • If FAQ not found, guide customers to contact support
 
 ## CLOSING
@@ -157,12 +188,12 @@ const TOOLS = [
     type: "function",
     function: {
       name: "search_shop_catalog",
-      description: "Search Shopify products by keyword or category",
+      description: "Search Shopify products by keyword or category. Returns ALL matching products (up to 20) to show complete catalog to customer.",
       parameters: {
         type: "object",
         properties: {
           query: { type: "string", description: "Search query" },
-          limit: { type: "integer", description: "Max results", default: 5 },
+          limit: { type: "integer", description: "Max results - use 20 to show all products", default: 20 },
         },
         required: ["query"],
       },
@@ -324,6 +355,103 @@ const KEYWORD_MAPPING: Record<string, string> = {
 function normalizePhoneNumber(phone: string): string {
   if (!phone) return "";
   return phone.replace(/[\s\-\+]/g, "").trim();
+}
+
+// Helper function to bold important information in text
+function boldImportantInfo(text: string): string {
+  if (!text) return "";
+  
+  // Bold numbers with units (70 hours, 1-year, 2 working days, etc.)
+  text = text.replace(/(\d+[\-\s]?\w*\s*(hours?|days?|weeks?|months?|years?|warranty|kg|gb|tb|mah|w))/gi, "*$1*");
+  
+  // Bold prices (Rs. 34,999 or PKR 34,999)
+  text = text.replace(/((?:Rs\.?|PKR)\s*[\d,]+)/gi, "*$1*");
+  
+  // Bold percentages
+  text = text.replace(/(\d+%)/g, "*$1*");
+  
+  return text;
+}
+
+// Helper function to get category emoji
+function getCategoryEmoji(query: string): string {
+  const queryLower = query.toLowerCase();
+  
+  if (queryLower.includes("chair")) return "🪑";
+  if (queryLower.includes("headphone") || queryLower.includes("headset")) return "🎧";
+  if (queryLower.includes("earbud")) return "🎵";
+  if (queryLower.includes("speaker")) return "🔊";
+  if (queryLower.includes("watch")) return "⌚";
+  if (queryLower.includes("power bank")) return "🔋";
+  if (queryLower.includes("gaming") || queryLower.includes("game")) return "🎮";
+  if (queryLower.includes("monitor") || queryLower.includes("screen")) return "🖥️";
+  if (queryLower.includes("mouse")) return "🖱️";
+  
+  return "🚀";
+}
+
+// Leopards Courier API Integration
+async function getLeopardsTracking(trackingNumber: string): Promise<string | null> {
+  try {
+    const LEOPARDS_API_KEY = "487F7B22F68312D2C1BBC93B1AEA445B1755080352";
+    
+    const response = await fetch(`https://leopardscourier.pk/api/tracking/${trackingNumber}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${LEOPARDS_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+    
+    if (!response.ok) {
+      console.error("❌ Leopards API error:", response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    // Extract latest status from Leopards response
+    if (data && data.status) {
+      return data.status;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("❌ Leopards tracking error:", error);
+    return null;
+  }
+}
+
+// PostEx Courier API Integration
+async function getPostExTracking(trackingNumber: string): Promise<string | null> {
+  try {
+    const POSTEX_API_KEY = "N2FkOTMyYzJmNzUyNDVkNjkyNWFiNmVlYTAzNTMyMWQ6OTBiY2VkNTBmOGRiNDExNWEwNDg2YjcxZjczMjAxOGE=";
+    
+    const response = await fetch(`https://api.postex.pk/services/integration/api/order/v1/track-order/${trackingNumber}`, {
+      method: "GET",
+      headers: {
+        "token": POSTEX_API_KEY,
+        "Content-Type": "application/json"
+      }
+    });
+    
+    if (!response.ok) {
+      console.error("❌ PostEx API error:", response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    // Extract latest status from PostEx response
+    if (data && data.dist && data.dist.status) {
+      return data.dist.status;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("❌ PostEx tracking error:", error);
+    return null;
+  }
 }
 
 // Helper function to clean HTML for WhatsApp
@@ -679,8 +807,12 @@ serve(async (req) => {
             const originalQuery = args.query.trim();
             const improvedQuery = improveSearchQuery(originalQuery);
             const searchTerm = improvedQuery.toLowerCase();
+            const categoryEmoji = getCategoryEmoji(originalQuery);
             
             console.log(`🔍 Searching for: "${searchTerm}"`);
+            
+            // Use limit from args, default to 20 to show ALL products
+            const limit = args.limit || 20;
             
             const { data: products, error: searchError } = await supabase
               .from("shopify_products")
@@ -688,7 +820,7 @@ serve(async (req) => {
               .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
               .gt("inventory", 0)
               .order("price", { ascending: true })
-              .limit(10);
+              .limit(limit);
             
             if (searchError || !products || products.length === 0) {
               output = JSON.stringify({ 
@@ -708,15 +840,39 @@ serve(async (req) => {
                   })),
                 }, { onConflict: "phone_number" });
               
+              // Parse variants to get price range and colors for each product
+              const enrichedProducts = products.map((p, i) => {
+                const variants = JSON.parse(p.variants || "[]");
+                
+                // Get price range
+                let priceMin = p.price;
+                let priceMax = p.price;
+                if (variants.length > 1) {
+                  const prices = variants.map((v: any) => parseFloat(v.price)).filter((price: number) => !isNaN(price));
+                  if (prices.length > 0) {
+                    priceMin = Math.min(...prices);
+                    priceMax = Math.max(...prices);
+                  }
+                }
+                
+                // Get colors
+                const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
+                
+                return {
+                  number: i + 1,
+                  title: p.title,
+                  price_min: priceMin,
+                  price_max: priceMax,
+                  colors: colors,
+                  in_stock: true
+                };
+              });
+              
               output = JSON.stringify({
                 found: true,
                 count: products.length,
-                products: products.map((p, i) => ({
-                  number: i + 1,
-                  title: p.title,
-                  price: p.price,
-                  in_stock: true
-                }))
+                category_emoji: categoryEmoji,
+                products: enrichedProducts
               });
             }
           }
@@ -796,6 +952,24 @@ serve(async (req) => {
               const shippingAddr = order.shipping_address || {};
               const city = shippingAddr.city || "your city";
               
+              // Fetch real-time courier tracking if available
+              let courierStatus = null;
+              if (order.tracking_number && order.courier_name) {
+                const courierLower = order.courier_name.toLowerCase();
+                
+                if (courierLower.includes("leopard")) {
+                  console.log(`🚚 Fetching Leopards tracking for: ${order.tracking_number}`);
+                  courierStatus = await getLeopardsTracking(order.tracking_number);
+                } else if (courierLower.includes("postex")) {
+                  console.log(`🚚 Fetching PostEx tracking for: ${order.tracking_number}`);
+                  courierStatus = await getPostExTracking(order.tracking_number);
+                }
+                
+                if (courierStatus) {
+                  console.log(`✅ Courier status: ${courierStatus}`);
+                }
+              }
+              
               output = JSON.stringify({
                 found: true,
                 order_number: order.order_number,
@@ -805,6 +979,7 @@ serve(async (req) => {
                 courier_name: order.courier_name || null,
                 tracking_number: order.tracking_number || null,
                 tracking_url: order.tracking_url || null,
+                courier_status: courierStatus,
                 financial_status: order.financial_status,
                 total_price: order.total_price,
                 line_items: order.line_items
@@ -829,16 +1004,19 @@ serve(async (req) => {
               });
             
             if (faqs && faqs.length > 0) {
+              // Bold important information in FAQ answers
+              const enrichedFaqs = faqs.map((faq: any) => ({
+                question: faq.question,
+                answer: boldImportantInfo(faq.answer),
+                category: faq.category,
+                video_urls: faq.video_urls,
+                image_urls: faq.image_urls
+              }));
+              
               output = JSON.stringify({
                 found: true,
                 count: faqs.length,
-                faqs: faqs.map((faq: any) => ({
-                  question: faq.question,
-                  answer: faq.answer,
-                  category: faq.category,
-                  video_urls: faq.video_urls,
-                  image_urls: faq.image_urls
-                }))
+                faqs: enrichedFaqs
               });
             } else {
               output = JSON.stringify({
