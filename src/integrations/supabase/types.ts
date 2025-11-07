@@ -89,6 +89,45 @@ export type Database = {
         }
         Relationships: []
       }
+      courier_settings: {
+        Row: {
+          api_endpoint: string | null
+          api_key: string | null
+          courier_name: string
+          created_at: string | null
+          display_name: string
+          id: string
+          is_active: boolean | null
+          karachi_delivery_days: number | null
+          outside_karachi_delivery_days: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          courier_name: string
+          created_at?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean | null
+          karachi_delivery_days?: number | null
+          outside_karachi_delivery_days?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          courier_name?: string
+          created_at?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean | null
+          karachi_delivery_days?: number | null
+          outside_karachi_delivery_days?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           created_at: string | null

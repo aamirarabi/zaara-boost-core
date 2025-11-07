@@ -65,6 +65,28 @@ Please tell me what you would like help with! 😊"
 • You cannot read images
 • Please do not ask customer name multiple times, just ask when it feels natural
 
+## INTENT CLASSIFICATION - CRITICAL
+Before using any tool, classify the user's intent:
+
+**FAQ/Information Questions** (user wants to KNOW):
+- "battery time of reverb headphone" → search_faqs
+- "where is display centre" → search_faqs
+- "warranty policy" → search_faqs
+- "delivery time" → search_faqs
+- "how long" / "what is" / "can i" → search_faqs
+
+**Product Browsing** (user wants to SEE products):
+- "show me headphones" → search_shop_catalog
+- "chairs" / "headphones" (just category name) → search_shop_catalog
+- "what products do you have" → search_shop_catalog
+- "looking for gaming mouse" → search_shop_catalog
+
+**Order Tracking:**
+- "track order" / "order status" → track_customer_order
+
+NEVER use search_shop_catalog for information questions!
+NEVER use search_faqs for product browsing!
+
 ## PRODUCT SEARCH & LISTING FORMAT
 • When user asks about products, ALWAYS use the search_shop_catalog tool
 • The tool will return ALL matching products - display them ALL (not just 2)
@@ -110,10 +132,18 @@ When showing individual product details after user selects a number:
 • ⭐⭐⭐⭐⭐ "[review text]" - [Customer Name], [City]
 • ⭐⭐⭐⭐ "[review text]" - [Customer Name], [City]
 
+📹 Video: [video_url if available]
+
 For more details and secure order:
 [product_url]
 
 Would you like to order this? 😊"
+
+## OUT-OF-STOCK HANDLING - WAITLIST SYSTEM
+When a product is out of stock:
+1. Display product details with ❌ Out of Stock
+2. Ask: "[Name] Sir/Madam, would you like notification when back in stock? 🔔"
+3. If user says "Yes" or similar, confirm: "Perfect! You're on the waitlist! 🔔✨"
 
 ## ORDER TRACKING PROTOCOL - CRITICAL
 When user mentions:
@@ -140,17 +170,22 @@ Order no: #Booster[order_number]
 🏙️ City: [city]
 💰 Total Price: PKR [total_price]
 ✅ Status: [fulfillment_status]
-🚚 Courier: [courier_name] (Tracking #: [tracking_number])
+🚚 Courier: [display_courier_name] (Tracking #: [tracking_number])
 
-📍 Real-time Tracking Status:
-[If courier tracking data available:]
-[Show latest status from courier API]
+📅 DELIVERY ESTIMATES:
 
-[If tracking URL available:]
-You can check the latest status anytime using this tracking link:
+✅ Scheduled: [scheduled_eta_date]
+   ([delivery_days] days from fulfillment)
+
+[If courier_eta_available:]
+📍 Courier ETA: [courier_eta_date]
+
+[delivery_status: ✅ On Track! / ⚠️ Delayed by X days / 🎉 Early!]
+
+📍 Real-time Status: [courier_status]
+
+You can check the latest status anytime:
 [tracking_url]
-
-Expected Arrival: Since you are in [city], your order should reach you within *1-2 working days* for Karachi or *4-5 working days* for outside Karachi after dispatch.
 
 Feel free to reach out if you have any more questions or need further assistance! 😊"
 
@@ -390,15 +425,66 @@ function getCategoryEmoji(query: string): string {
   return "🚀";
 }
 
+// Get courier display name from settings (maps "Other" → "PostEx")
+async function getCourierDisplayName(supabase: any, shopifyCourierName: string): Promise<string> {
+  const { data: courierSettings } = await supabase
+    .from("courier_settings")
+    .select("display_name")
+    .eq("courier_name", shopifyCourierName)
+    .single();
+  
+  return courierSettings?.display_name || shopifyCourierName;
+}
+
+// Calculate scheduled ETA based on fulfillment date and city
+function calculateScheduledETA(fulfillmentDate: string | null, city: string): {
+  scheduledDate: string;
+  daysFromFulfillment: number;
+} {
+  if (!fulfillmentDate) {
+    return { scheduledDate: "Pending fulfillment", daysFromFulfillment: 0 };
+  }
+  
+  const fulfillment = new Date(fulfillmentDate);
+  const businessDays = city.toLowerCase() === 'karachi' ? 2 : 5;
+  
+  let current = new Date(fulfillment);
+  let added = 0;
+  
+  while (added < businessDays) {
+    current.setDate(current.getDate() + 1);
+    // Skip Sundays
+    if (current.getDay() !== 0) added++;
+  }
+  
+  return {
+    scheduledDate: current.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }),
+    daysFromFulfillment: businessDays
+  };
+}
+
 // Leopards Courier API Integration
-async function getLeopardsTracking(trackingNumber: string): Promise<string | null> {
+async function getLeopardsTracking(supabase: any, trackingNumber: string): Promise<{
+  estimatedDate: string | null;
+  status: string;
+} | null> {
   try {
-    const LEOPARDS_API_KEY = "487F7B22F68312D2C1BBC93B1AEA445B1755080352";
+    // Get API key from courier_settings
+    const { data: settings } = await supabase
+      .from("courier_settings")
+      .select("api_key, api_endpoint")
+      .eq("courier_name", "Leopards")
+      .single();
     
-    const response = await fetch(`https://leopardscourier.pk/api/tracking/${trackingNumber}`, {
+    if (!settings?.api_key) {
+      console.error("❌ Leopards API key not configured");
+      return null;
+    }
+    
+    const response = await fetch(`${settings.api_endpoint}/${trackingNumber}`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${LEOPARDS_API_KEY}`,
+        "Authorization": `Bearer ${settings.api_key}`,
         "Content-Type": "application/json"
       }
     });
@@ -410,27 +496,39 @@ async function getLeopardsTracking(trackingNumber: string): Promise<string | nul
     
     const data = await response.json();
     
-    // Extract latest status from Leopards response
-    if (data && data.status) {
-      return data.status;
-    }
-    
-    return null;
+    return {
+      estimatedDate: data.expected_delivery_date || null,
+      status: data.status || "In Transit"
+    };
   } catch (error) {
     console.error("❌ Leopards tracking error:", error);
     return null;
   }
 }
 
-// PostEx Courier API Integration
-async function getPostExTracking(trackingNumber: string): Promise<string | null> {
+// PostEx Courier API Integration  
+async function getPostExTracking(supabase: any, trackingNumber: string): Promise<{
+  estimatedDate: string | null;
+  status: string;
+} | null> {
   try {
-    const POSTEX_API_KEY = "N2FkOTMyYzJmNzUyNDVkNjkyNWFiNmVlYTAzNTMyMWQ6OTBiY2VkNTBmOGRiNDExNWEwNDg2YjcxZjczMjAxOGE=";
+    // Get API key from courier_settings
+    const { data: settings } = await supabase
+      .from("courier_settings")
+      .select("api_key, api_endpoint")
+      .or("courier_name.eq.PostEx,courier_name.eq.Other")
+      .limit(1)
+      .single();
     
-    const response = await fetch(`https://api.postex.pk/services/integration/api/order/v1/track-order/${trackingNumber}`, {
+    if (!settings?.api_key) {
+      console.error("❌ PostEx API key not configured");
+      return null;
+    }
+    
+    const response = await fetch(`${settings.api_endpoint}/${trackingNumber}`, {
       method: "GET",
       headers: {
-        "token": POSTEX_API_KEY,
+        "token": settings.api_key,
         "Content-Type": "application/json"
       }
     });
@@ -442,12 +540,10 @@ async function getPostExTracking(trackingNumber: string): Promise<string | null>
     
     const data = await response.json();
     
-    // Extract latest status from PostEx response
-    if (data && data.dist && data.dist.status) {
-      return data.dist.status;
-    }
-    
-    return null;
+    return {
+      estimatedDate: data.dist?.estimated_delivery || null,
+      status: data.dist?.status || "In Transit"
+    };
   } catch (error) {
     console.error("❌ PostEx tracking error:", error);
     return null;
@@ -589,11 +685,12 @@ serve(async (req) => {
       // Get conversation context to retrieve last product list
       const { data: context } = await supabase
         .from("conversation_context")
-        .select("last_product_list")
+        .select("last_product_list, customer_name")
         .eq("phone_number", phone_number)
         .single();
       
       const productList = context?.last_product_list || [];
+      const customerName = context?.customer_name || "";
       
       if (productList.length > 0 && messageNum <= productList.length) {
         const selectedProduct = productList[messageNum - 1];
@@ -634,36 +731,115 @@ serve(async (req) => {
           const cleanDescription = cleanHtmlForWhatsApp(product.description || "");
           const features = cleanDescription.split("\n").filter((line: string) => line.trim().startsWith("•")).slice(0, 5);
           
-          // Build structured response
+          // Extract video URL from metafields
+          const metafields = product.metafields || {};
+          let videoUrl = null;
+          if (metafields.product_video) {
+            videoUrl = metafields.product_video;
+          } else if (Array.isArray(metafields) && metafields.length > 0) {
+            const videoMeta = metafields.find((m: any) => 
+              m.namespace === 'custom' && m.key === 'product_video'
+            );
+            if (videoMeta) videoUrl = videoMeta.value;
+          }
+          
+          // Check if out of stock
+          const isOutOfStock = (product.inventory || 0) === 0;
+          
+          // Build structured response with single caption
           let detailsText = `*${product.title}*\n\n`;
           detailsText += `💰 Price: ${priceText}\n`;
           if (colors.length > 0) {
             detailsText += `🎨 Available Colors: ${colors.join(", ")}\n`;
           }
-          detailsText += `✅ Availability: In stock\n\n`;
           
-          if (features.length > 0) {
-            detailsText += `✨ Key Features:\n${features.join("\n")}\n\n`;
+          if (isOutOfStock) {
+            detailsText += `❌ Availability: Out of Stock\n\n`;
+            detailsText += `${customerName ? customerName + ' Sir/Madam, would' : 'Would'} you like notification when back in stock? 🔔\n\n`;
+            detailsText += `Reply "Yes" to join waitlist! 😊`;
+            
+            // Set context for waitlist
+            await supabase
+              .from("conversation_context")
+              .upsert({
+                phone_number: phone_number,
+                customer_name: customerName,
+                context_data: {
+                  awaiting_waitlist: true,
+                  waitlist_product_id: product.product_id,
+                  waitlist_product_title: product.title
+                }
+              }, { onConflict: "phone_number" });
+          } else {
+            detailsText += `✅ Availability: In stock\n\n`;
+            
+            if (features.length > 0) {
+              detailsText += `✨ Key Features:\n${features.join("\n")}\n\n`;
+            }
+            
+            if (videoUrl) {
+              detailsText += `📹 Video: ${videoUrl}\n\n`;
+            }
+            
+            detailsText += `Would you like to order this? 😊`;
           }
           
-          detailsText += `Would you like to order this? 😊`;
-          
-          // Send product image FIRST
+          // IMPROVEMENT #1: Single message format - send image WITH caption
           const images = JSON.parse(product.images || "[]");
           if (images.length > 0) {
-            await sendWhatsAppImage(supabase, phone_number, images[0], product.title);
+            await sendWhatsAppImage(supabase, phone_number, images[0], detailsText);
+          } else {
+            // No image, send text only
+            await supabase.functions.invoke("send-whatsapp-message", {
+              body: { phone_number, message: detailsText },
+            });
           }
-          
-          // Send details text AFTER image
-          await supabase.functions.invoke("send-whatsapp-message", {
-            body: { phone_number, message: detailsText },
-          });
           
           return new Response(JSON.stringify({ success: true, response: detailsText }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
       }
+    }
+    
+    // Check for waitlist confirmation
+    const { data: contextCheck } = await supabase
+      .from("conversation_context")
+      .select("context_data, customer_name")
+      .eq("phone_number", phone_number)
+      .maybeSingle();
+    
+    const contextData = contextCheck?.context_data || {};
+    const customerName = contextCheck?.customer_name || "";
+    
+    if (contextData.awaiting_waitlist && message.toLowerCase().match(/^(yes|yeah|sure|ok|okay)$/)) {
+      // Add to waitlist
+      await supabase
+        .from("product_waitlist")
+        .insert({
+          customer_phone: phone_number,
+          customer_name: customerName,
+          product_id: contextData.waitlist_product_id,
+          product_title: contextData.waitlist_product_title
+        });
+      
+      // Clear context
+      await supabase
+        .from("conversation_context")
+        .update({
+          context_data: {}
+        })
+        .eq("phone_number", phone_number);
+      
+      const confirmMessage = `Perfect! ${customerName ? customerName + ' Sir/Madam, you' : 'You'}'re on the waitlist for ${contextData.waitlist_product_title}! 🔔✨\n\nWe'll notify you as soon as it's back in stock! 😊`;
+      
+      await supabase.functions.invoke("send-whatsapp-message", {
+        body: { phone_number, message: confirmMessage },
+      });
+      
+      return new Response(JSON.stringify({ success: true, response: confirmMessage }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Get last 10 messages for context
@@ -837,10 +1013,12 @@ User query: ${message}`
             // Use limit from args, default to 20 to show ALL products
             const limit = args.limit || 20;
             
+            // BUG FIX #5: Only show ACTIVE products (status='active')
             const { data: products, error: searchError } = await supabase
               .from("shopify_products")
               .select("*")
               .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
+              .eq("status", "active")  // ✅ Only active products
               .gt("inventory", 0)
               .order("price", { ascending: true })
               .limit(limit);
@@ -907,11 +1085,26 @@ User query: ${message}`
               .single();
             
             if (product) {
+              // Extract video URL from metafields if available
+              const metafields = product.metafields || {};
+              let videoUrl = null;
+              
+              if (metafields.product_video) {
+                videoUrl = metafields.product_video;
+              } else if (Array.isArray(metafields) && metafields.length > 0) {
+                const videoMeta = metafields.find((m: any) => 
+                  m.namespace === 'custom' && m.key === 'product_video'
+                );
+                if (videoMeta) videoUrl = videoMeta.value;
+              }
+              
               output = JSON.stringify({
                 found: true,
                 title: product.title,
                 price: product.price,
-                description: cleanHtmlForWhatsApp(product.description || "")
+                description: cleanHtmlForWhatsApp(product.description || ""),
+                video_url: videoUrl,
+                inventory: product.inventory
               });
             } else {
               output = JSON.stringify({
@@ -975,21 +1168,45 @@ User query: ${message}`
               const shippingAddr = order.shipping_address || {};
               const city = shippingAddr.city || "your city";
               
+              // Get display courier name (maps "Other" → "PostEx")
+              const displayCourierName = await getCourierDisplayName(supabase, order.courier_name || "Unknown");
+              
+              // Calculate scheduled ETA
+              const scheduledETA = calculateScheduledETA(order.updated_at, city);
+              
               // Fetch real-time courier tracking if available
-              let courierStatus = null;
+              let courierTracking = null;
               if (order.tracking_number && order.courier_name) {
                 const courierLower = order.courier_name.toLowerCase();
                 
                 if (courierLower.includes("leopard")) {
                   console.log(`🚚 Fetching Leopards tracking for: ${order.tracking_number}`);
-                  courierStatus = await getLeopardsTracking(order.tracking_number);
-                } else if (courierLower.includes("postex")) {
+                  courierTracking = await getLeopardsTracking(supabase, order.tracking_number);
+                } else if (courierLower.includes("postex") || courierLower.includes("other")) {
                   console.log(`🚚 Fetching PostEx tracking for: ${order.tracking_number}`);
-                  courierStatus = await getPostExTracking(order.tracking_number);
+                  courierTracking = await getPostExTracking(supabase, order.tracking_number);
                 }
                 
-                if (courierStatus) {
-                  console.log(`✅ Courier status: ${courierStatus}`);
+                if (courierTracking) {
+                  console.log(`✅ Courier tracking:`, courierTracking);
+                }
+              }
+              
+              // Compare ETAs for delivery status
+              let deliveryStatus = "";
+              if (courierTracking?.estimatedDate && scheduledETA.scheduledDate !== "Pending fulfillment") {
+                const scheduledDate = new Date(scheduledETA.scheduledDate);
+                const courierDate = new Date(courierTracking.estimatedDate);
+                
+                const timeDiff = courierDate.getTime() - scheduledDate.getTime();
+                const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                
+                if (Math.abs(daysDiff) <= 1) {
+                  deliveryStatus = "✅ On Track!";
+                } else if (daysDiff > 1) {
+                  deliveryStatus = `⚠️ Delayed by ${daysDiff} day(s)`;
+                } else {
+                  deliveryStatus = `🎉 Early!`;
                 }
               }
               
@@ -999,10 +1216,14 @@ User query: ${message}`
                 customer_name: order.customer_name || "Customer",
                 city: city,
                 fulfillment_status: order.fulfillment_status || "Processing",
-                courier_name: order.courier_name || null,
+                courier_name: displayCourierName,
                 tracking_number: order.tracking_number || null,
                 tracking_url: order.tracking_url || null,
-                courier_status: courierStatus,
+                courier_status: courierTracking?.status || null,
+                courier_eta: courierTracking?.estimatedDate || null,
+                scheduled_eta: scheduledETA.scheduledDate,
+                scheduled_days: scheduledETA.daysFromFulfillment,
+                delivery_status: deliveryStatus,
                 financial_status: order.financial_status,
                 total_price: order.total_price,
                 line_items: order.line_items

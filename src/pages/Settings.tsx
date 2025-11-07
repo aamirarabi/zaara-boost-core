@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Copy, Check } from "lucide-react";
+import { Loader2, Copy, Check, Settings as SettingsIcon, Plus, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 const Settings = () => {
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,9 @@ const Settings = () => {
   const [syncingCustomers, setSyncingCustomers] = useState(false);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string>("");
+  const [courierSettings, setCourierSettings] = useState<any[]>([]);
+  const [editingCourier, setEditingCourier] = useState<any | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [settings, setSettings] = useState({
     whatsapp_phone_id: "",
     whatsapp_access_token: "",
@@ -26,6 +31,7 @@ const Settings = () => {
 
   useEffect(() => {
     loadSettings();
+    loadCourierSettings();
   }, []);
 
   const loadSettings = async () => {
@@ -36,6 +42,47 @@ const Settings = () => {
         settingsObj[item.setting_key] = item.setting_value || "";
       });
       setSettings(settingsObj);
+    }
+  };
+
+  const loadCourierSettings = async () => {
+    const { data } = await supabase
+      .from("courier_settings")
+      .select("*")
+      .order("courier_name");
+    if (data) {
+      setCourierSettings(data);
+    }
+  };
+
+  const saveCourierSetting = async () => {
+    if (!editingCourier) return;
+    
+    const { error } = await supabase
+      .from("courier_settings")
+      .upsert(editingCourier);
+    
+    if (error) {
+      toast.error("Failed to save courier settings");
+    } else {
+      toast.success("Courier settings saved!");
+      loadCourierSettings();
+      setIsDialogOpen(false);
+      setEditingCourier(null);
+    }
+  };
+
+  const deleteCourierSetting = async (id: string) => {
+    const { error } = await supabase
+      .from("courier_settings")
+      .delete()
+      .eq("id", id);
+    
+    if (error) {
+      toast.error("Failed to delete courier");
+    } else {
+      toast.success("Courier deleted!");
+      loadCourierSettings();
     }
   };
 
@@ -287,6 +334,172 @@ const Settings = () => {
                 <li>Stay on this page during sync to see progress</li>
                 <li>Check edge function logs for detailed sync progress</li>
               </ul>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Courier Management 🚚</CardTitle>
+            <CardDescription>Configure courier APIs and delivery timings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+              <p className="text-sm text-muted-foreground">
+                Manage courier integrations for real-time order tracking
+              </p>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    size="sm" 
+                    onClick={() => {
+                      setEditingCourier({
+                        courier_name: "",
+                        display_name: "",
+                        api_key: "",
+                        api_endpoint: "",
+                        karachi_delivery_days: 2,
+                        outside_karachi_delivery_days: 5,
+                        is_active: true
+                      });
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Courier
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingCourier?.id ? "Edit Courier" : "Add New Courier"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Configure courier API settings and delivery timings
+                    </DialogDescription>
+                  </DialogHeader>
+                  {editingCourier && (
+                    <div className="space-y-4 mt-4">
+                      <div className="space-y-2">
+                        <Label>Courier Name (Internal)</Label>
+                        <Input
+                          value={editingCourier.courier_name}
+                          onChange={(e) => setEditingCourier({...editingCourier, courier_name: e.target.value})}
+                          placeholder="Leopards"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Display Name</Label>
+                        <Input
+                          value={editingCourier.display_name}
+                          onChange={(e) => setEditingCourier({...editingCourier, display_name: e.target.value})}
+                          placeholder="Leopards Courier"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>API Key</Label>
+                        <Input
+                          type="password"
+                          value={editingCourier.api_key || ""}
+                          onChange={(e) => setEditingCourier({...editingCourier, api_key: e.target.value})}
+                          placeholder="API Key"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>API Endpoint</Label>
+                        <Input
+                          value={editingCourier.api_endpoint || ""}
+                          onChange={(e) => setEditingCourier({...editingCourier, api_endpoint: e.target.value})}
+                          placeholder="https://api.courier.com/track"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Karachi Delivery (days)</Label>
+                          <Input
+                            type="number"
+                            value={editingCourier.karachi_delivery_days}
+                            onChange={(e) => setEditingCourier({...editingCourier, karachi_delivery_days: parseInt(e.target.value)})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Outside Karachi (days)</Label>
+                          <Input
+                            type="number"
+                            value={editingCourier.outside_karachi_delivery_days}
+                            onChange={(e) => setEditingCourier({...editingCourier, outside_karachi_delivery_days: parseInt(e.target.value)})}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={editingCourier.is_active}
+                          onCheckedChange={(checked) => setEditingCourier({...editingCourier, is_active: checked})}
+                        />
+                        <Label>Active</Label>
+                      </div>
+                      <div className="flex gap-2 mt-4">
+                        <Button onClick={saveCourierSetting} className="flex-1">
+                          Save
+                        </Button>
+                        <Button onClick={() => {setIsDialogOpen(false); setEditingCourier(null);}} variant="outline">
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="space-y-3">
+              {courierSettings.map((courier) => (
+                <div key={courier.id} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="font-semibold">{courier.display_name}</h3>
+                        {courier.is_active ? (
+                          <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Active</span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">Inactive</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Karachi: {courier.karachi_delivery_days} days | 
+                        Outside: {courier.outside_karachi_delivery_days} days
+                      </p>
+                      {courier.api_endpoint && (
+                        <p className="text-xs text-muted-foreground mt-1 font-mono">
+                          {courier.api_endpoint}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingCourier(courier);
+                          setIsDialogOpen(true);
+                        }}
+                      >
+                        <SettingsIcon className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => {
+                          if (confirm(`Delete ${courier.display_name}?`)) {
+                            deleteCourierSetting(courier.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
