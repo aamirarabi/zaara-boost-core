@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
 
     // Fetch metafields for each product to get Judge.me ratings
     console.log('Fetching metafields for products...');
+    let productsWithReviews = 0;
     for (const product of allProducts) {
       try {
         const metafieldsUrl = `https://${storeUrl}/admin/api/2024-10/products/${product.id}/metafields.json?namespace=judgeme`;
@@ -84,11 +85,18 @@ Deno.serve(async (req) => {
         if (metaRes.ok) {
           const metaData = await metaRes.json();
           product.judgeme_metafields = metaData.metafields || [];
+          
+          if (product.judgeme_metafields.length > 0) {
+            productsWithReviews++;
+            console.log(`✅ Product "${product.title}" has Judge.me data:`, 
+              product.judgeme_metafields.map((m: any) => `${m.key}=${m.value}`).join(', '));
+          }
         }
       } catch (error) {
         console.error(`Error fetching metafields for product ${product.id}:`, error);
       }
     }
+    console.log(`📊 Summary: ${productsWithReviews} out of ${allProducts.length} products have Judge.me review data`);
 
     // Transform products for database
     const productsToUpsert = allProducts.map((p) => {
