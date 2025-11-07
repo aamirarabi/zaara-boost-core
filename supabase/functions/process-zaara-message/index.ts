@@ -1019,7 +1019,6 @@ User query: ${message}`
               .select("*")
               .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
               .eq("status", "active")  // ✅ Only active products
-              .gt("inventory", 0)
               .order("price", { ascending: true })
               .limit(limit);
             
