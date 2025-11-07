@@ -946,7 +946,7 @@ serve(async (req) => {
     }
 
     // Using new Production Assistant with updated API key
-    const ASSISTANT_ID = "asst_XD1YQeyvtzWIBKlFa0HNX9fZ";
+    const ASSISTANT_ID = "asst_XD1YQeyvtzWlBK1Fa0HNX9fZ";
     // Old Assistant (backup): asst_R7YwCRjq1BYHqGehfR9RtDFo
     console.log("🤖 Using OpenAI Assistants API with Assistant:", ASSISTANT_ID);
 
