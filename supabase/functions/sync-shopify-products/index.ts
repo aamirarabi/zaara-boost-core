@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     console.log('Starting Shopify product sync...');
 
     let allProducts: any[] = [];
-    let url = `https://${storeUrl}/admin/api/2024-10/products.json?limit=250`;
+    let url = `https://${storeUrl}/admin/api/2024-10/products.json?limit=250&fields=id,title,body_html,vendor,product_type,handle,status,tags,images,variants,metafields`;
 
     // Fetch all products with pagination
     while (url) {
@@ -73,22 +73,37 @@ Deno.serve(async (req) => {
     console.log(`Total products fetched: ${allProducts.length}`);
 
     // Transform products for database
-    const productsToUpsert = allProducts.map((p) => ({
-      product_id: p.id.toString(),
-      shopify_id: p.id.toString(),
-      title: p.title,
-      description: p.body_html,
-      vendor: p.vendor,
-      product_type: p.product_type,
-      handle: p.handle,
-      status: p.status,
-      tags: p.tags?.split(',').map((t: string) => t.trim()) || [],
-      images: JSON.stringify(p.images?.map((img: any) => img.src) || []),
-      variants: JSON.stringify(p.variants || []),
-      price: parseFloat(p.variants[0]?.price || '0'),
-      inventory: p.variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0),
-      synced_at: new Date().toISOString(),
-    }));
+    const productsToUpsert = allProducts.map((p) => {
+      // Extract metafields
+      const metafieldsObj: any = {};
+      if (p.metafields) {
+        p.metafields.forEach((mf: any) => {
+          metafieldsObj[mf.key] = mf.value;
+        });
+      }
+      
+      // Get all images
+      const allImages = p.images?.map((img: any) => img.src) || [];
+      
+      return {
+        product_id: p.id.toString(),
+        shopify_id: p.id.toString(),
+        title: p.title,
+        description: p.body_html,
+        vendor: p.vendor,
+        product_type: p.product_type,
+        handle: p.handle,
+        status: p.status,
+        tags: p.tags?.split(',').map((t: string) => t.trim()) || [],
+        images: JSON.stringify(p.images?.map((img: any) => img.src) || []),
+        variants: JSON.stringify(p.variants || []),
+        price: parseFloat(p.variants[0]?.price || '0'),
+        inventory: p.variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0),
+        metafields: metafieldsObj,
+        all_images: allImages,
+        synced_at: new Date().toISOString(),
+      };
+    });
 
     // Upsert products to database
     const { error: upsertError } = await supabaseClient

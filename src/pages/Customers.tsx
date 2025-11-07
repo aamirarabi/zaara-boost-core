@@ -7,13 +7,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, UserPlus, Users, TrendingUp, ShoppingBag, DollarSign } from "lucide-react";
+import { Search, UserPlus, Users, TrendingUp, ShoppingBag, DollarSign, RefreshCw, Loader2 } from "lucide-react";
 import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
+import { toast } from "sonner";
 
 const Customers = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
+  const [syncing, setSyncing] = useState(false);
   const [stats, setStats] = useState({
     totalCustomers: 0,
     newThisMonth: 0,
@@ -69,6 +71,33 @@ const Customers = () => {
     if (data) setCustomers(data);
   };
 
+  const syncCustomers = async () => {
+    setSyncing(true);
+    toast("Syncing Customers", {
+      description: "Fetching latest customers from Shopify...",
+    });
+
+    const { data, error } = await supabase.functions.invoke("sync-shopify-customers");
+
+    if (error) {
+      toast("Sync Failed", {
+        description: error.message,
+      });
+    } else if (data.error) {
+      toast("Sync Failed", {
+        description: data.error,
+      });
+    } else {
+      toast("Sync Complete", {
+        description: "Synced customers from Shopify successfully",
+      });
+      loadCustomers();
+      loadStats();
+    }
+
+    setSyncing(false);
+  };
+
   const filteredCustomers = customers.filter(
     (customer) =>
       customer.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -84,9 +113,18 @@ const Customers = () => {
             <h1 className="text-3xl font-bold">Customers</h1>
             <p className="text-muted-foreground">Manage your customer database</p>
           </div>
-          <Button>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Customer
+          <Button onClick={syncCustomers} disabled={syncing}>
+            {syncing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync from Shopify
+              </>
+            )}
           </Button>
         </div>
 

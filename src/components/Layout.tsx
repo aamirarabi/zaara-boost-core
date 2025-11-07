@@ -18,6 +18,7 @@ import {
   Brain,
   LogOut,
   Zap,
+  Star,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -29,6 +30,7 @@ const navigation = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Products", href: "/products", icon: Package },
   { name: "Orders", href: "/orders", icon: ShoppingCart },
+  { name: "Reviews", href: "/reviews", icon: Star },
   { name: "FAQs", href: "/faqs", icon: MessageSquare },
   { name: "Inbox", href: "/inbox", icon: Inbox },
   { name: "Warranty", href: "/warranty", icon: Shield },

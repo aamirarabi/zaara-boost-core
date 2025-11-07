@@ -59,32 +59,86 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_analytics: {
+        Row: {
+          created_at: string | null
+          human_takeover: boolean | null
+          id: string
+          message_count: number | null
+          phone_number: string
+          query_type: string | null
+          response_time_ms: number | null
+          satisfaction_rating: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          human_takeover?: boolean | null
+          id?: string
+          message_count?: number | null
+          phone_number: string
+          query_type?: string | null
+          response_time_ms?: number | null
+          satisfaction_rating?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          human_takeover?: boolean | null
+          id?: string
+          message_count?: number | null
+          phone_number?: string
+          query_type?: string | null
+          response_time_ms?: number | null
+          satisfaction_rating?: number | null
+        }
+        Relationships: []
+      }
       conversation_context: {
         Row: {
+          ai_enabled: boolean | null
           awaiting_response: string | null
+          chat_status: string | null
           context_data: Json | null
+          created_at: string | null
+          customer_name: string | null
           last_intent: string | null
           last_product_list: Json | null
           last_product_viewed: string | null
           phone_number: string
+          taken_over_at: string | null
+          taken_over_by: string | null
+          thread_id: string | null
           updated_at: string | null
         }
         Insert: {
+          ai_enabled?: boolean | null
           awaiting_response?: string | null
+          chat_status?: string | null
           context_data?: Json | null
+          created_at?: string | null
+          customer_name?: string | null
           last_intent?: string | null
           last_product_list?: Json | null
           last_product_viewed?: string | null
           phone_number: string
+          taken_over_at?: string | null
+          taken_over_by?: string | null
+          thread_id?: string | null
           updated_at?: string | null
         }
         Update: {
+          ai_enabled?: boolean | null
           awaiting_response?: string | null
+          chat_status?: string | null
           context_data?: Json | null
+          created_at?: string | null
+          customer_name?: string | null
           last_intent?: string | null
           last_product_list?: Json | null
           last_product_viewed?: string | null
           phone_number?: string
+          taken_over_at?: string | null
+          taken_over_by?: string | null
+          thread_id?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -125,6 +179,54 @@ export type Database = {
           karachi_delivery_days?: number | null
           outside_karachi_delivery_days?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      customer_notes: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          id: string
+          note: string
+          phone_number: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          id?: string
+          note: string
+          phone_number: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          note?: string
+          phone_number?: string
+        }
+        Relationships: []
+      }
+      customer_tags: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          phone_number: string
+          tag: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          phone_number: string
+          tag: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          phone_number?: string
+          tag?: string
         }
         Relationships: []
       }
@@ -272,6 +374,60 @@ export type Database = {
         }
         Relationships: []
       }
+      product_reviews: {
+        Row: {
+          created_at: string | null
+          customer_email: string | null
+          customer_name: string
+          helpful_count: number | null
+          id: string
+          judge_me_id: string | null
+          pictures: Json | null
+          product_id: string
+          product_title: string | null
+          rating: number
+          review_date: string
+          review_text: string | null
+          review_title: string | null
+          updated_at: string | null
+          verified_purchase: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_email?: string | null
+          customer_name: string
+          helpful_count?: number | null
+          id?: string
+          judge_me_id?: string | null
+          pictures?: Json | null
+          product_id: string
+          product_title?: string | null
+          rating: number
+          review_date: string
+          review_text?: string | null
+          review_title?: string | null
+          updated_at?: string | null
+          verified_purchase?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_email?: string | null
+          customer_name?: string
+          helpful_count?: number | null
+          id?: string
+          judge_me_id?: string | null
+          pictures?: Json | null
+          product_id?: string
+          product_title?: string | null
+          rating?: number
+          review_date?: string
+          review_text?: string | null
+          review_title?: string | null
+          updated_at?: string | null
+          verified_purchase?: boolean | null
+        }
+        Relationships: []
+      }
       product_waitlist: {
         Row: {
           created_at: string | null
@@ -302,6 +458,90 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_templates: {
+        Row: {
+          category: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          message: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          message: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          message?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      review_analytics: {
+        Row: {
+          average_rating: number | null
+          common_complaints: string[] | null
+          common_compliments: string[] | null
+          created_at: string | null
+          five_star_count: number | null
+          four_star_count: number | null
+          id: string
+          last_synced_at: string | null
+          one_star_count: number | null
+          product_id: string
+          product_title: string | null
+          three_star_count: number | null
+          total_reviews: number | null
+          two_star_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          average_rating?: number | null
+          common_complaints?: string[] | null
+          common_compliments?: string[] | null
+          created_at?: string | null
+          five_star_count?: number | null
+          four_star_count?: number | null
+          id?: string
+          last_synced_at?: string | null
+          one_star_count?: number | null
+          product_id: string
+          product_title?: string | null
+          three_star_count?: number | null
+          total_reviews?: number | null
+          two_star_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          average_rating?: number | null
+          common_complaints?: string[] | null
+          common_compliments?: string[] | null
+          created_at?: string | null
+          five_star_count?: number | null
+          four_star_count?: number | null
+          id?: string
+          last_synced_at?: string | null
+          one_star_count?: number | null
+          product_id?: string
+          product_title?: string | null
+          three_star_count?: number | null
+          total_reviews?: number | null
+          two_star_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       shopify_orders: {
         Row: {
           billing_address: Json | null
@@ -312,12 +552,16 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
+          delivery_status: string | null
+          estimated_delivery_date: string | null
           financial_status: string | null
           fulfillment_status: string | null
           line_items: Json | null
           note: string | null
           order_id: string
           order_number: string | null
+          order_source: string | null
+          scheduled_delivery_date: string | null
           shipping_address: Json | null
           shopify_id: string | null
           subtotal: number | null
@@ -338,12 +582,16 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          delivery_status?: string | null
+          estimated_delivery_date?: string | null
           financial_status?: string | null
           fulfillment_status?: string | null
           line_items?: Json | null
           note?: string | null
           order_id: string
           order_number?: string | null
+          order_source?: string | null
+          scheduled_delivery_date?: string | null
           shipping_address?: Json | null
           shopify_id?: string | null
           subtotal?: number | null
@@ -364,12 +612,16 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          delivery_status?: string | null
+          estimated_delivery_date?: string | null
           financial_status?: string | null
           fulfillment_status?: string | null
           line_items?: Json | null
           note?: string | null
           order_id?: string
           order_number?: string | null
+          order_source?: string | null
+          scheduled_delivery_date?: string | null
           shipping_address?: Json | null
           shopify_id?: string | null
           subtotal?: number | null
@@ -393,6 +645,7 @@ export type Database = {
       }
       shopify_products: {
         Row: {
+          all_images: Json | null
           compare_at_price: number | null
           created_at: string | null
           description: string | null
@@ -415,6 +668,7 @@ export type Database = {
           vendor: string | null
         }
         Insert: {
+          all_images?: Json | null
           compare_at_price?: number | null
           created_at?: string | null
           description?: string | null
@@ -437,6 +691,7 @@ export type Database = {
           vendor?: string | null
         }
         Update: {
+          all_images?: Json | null
           compare_at_price?: number | null
           created_at?: string | null
           description?: string | null

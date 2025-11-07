@@ -10,6 +10,7 @@ import Settings from "./pages/Settings";
 import Customers from "./pages/Customers";
 import Products from "./pages/Products";
 import Orders from "./pages/Orders";
+import Reviews from "./pages/Reviews";
 import FAQs from "./pages/FAQs";
 import Inbox from "./pages/Inbox";
 import Warranty from "./pages/Warranty";
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
           <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+          <Route path="/reviews" element={<ProtectedRoute><Reviews /></ProtectedRoute>} />
           <Route path="/faqs" element={<ProtectedRoute><FAQs /></ProtectedRoute>} />
           <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
           <Route path="/warranty" element={<ProtectedRoute><Warranty /></ProtectedRoute>} />

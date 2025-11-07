@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.sync-shopify-customers]
 verify_jwt = false
 
+[functions.sync-judge-me-reviews]
+verify_jwt = false
+
 [functions.process-zaara-message]
 verify_jwt = false
 
