@@ -1147,70 +1147,128 @@ User query: ${message}`
             
             console.log(`🔍 Searching for: "${searchTerm}"`);
             
-            // Use limit from args, default to 20 to show ALL products
-            const limit = args.limit || 20;
-            
-            // BUG FIX #5: Only show ACTIVE products (status='active')
-            const { data: products, error: searchError } = await supabase
+            // IMPROVEMENT: Try exact match first for specific product requests
+            const { data: exactMatch } = await supabase
               .from("shopify_products")
               .select("*")
-              .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
-              .eq("status", "active")  // ✅ Only active products
-              .order("price", { ascending: true })
-              .limit(limit);
+              .ilike("title", `%${searchTerm}%`)
+              .eq("status", "active")
+              .limit(1);
             
-            if (searchError || !products || products.length === 0) {
-              output = JSON.stringify({ 
-                found: false, 
-                message: `No products found for "${originalQuery}"` 
-              });
-            } else {
-              console.log(`✅ Found ${products.length} products`);
+            // If exact match found and query looks specific (>2 words), return only that product
+            const queryWords = originalQuery.split(/\s+/).length;
+            if (exactMatch && exactMatch.length > 0 && queryWords >= 2) {
+              console.log(`✅ Found exact match: ${exactMatch[0].title}`);
               
+              // Set as single product in context
               await supabase
                 .from("conversation_context")
                 .upsert({
                   phone_number: phone_number,
-                  last_product_list: products.map(p => ({ 
-                    product_id: p.product_id, 
-                    title: p.title 
-                  })),
+                  last_product_list: [{ 
+                    product_id: exactMatch[0].product_id, 
+                    title: exactMatch[0].title 
+                  }],
                 }, { onConflict: "phone_number" });
               
-              // Parse variants to get price range and colors for each product
-              const enrichedProducts = products.map((p, i) => {
-                const variants = JSON.parse(p.variants || "[]");
-                
-                // Get price range
-                let priceMin = p.price;
-                let priceMax = p.price;
-                if (variants.length > 1) {
-                  const prices = variants.map((v: any) => parseFloat(v.price)).filter((price: number) => !isNaN(price));
-                  if (prices.length > 0) {
-                    priceMin = Math.min(...prices);
-                    priceMax = Math.max(...prices);
-                  }
+              const product = exactMatch[0];
+              const variants = JSON.parse(product.variants || "[]");
+              
+              // Get price range
+              let priceMin = product.price;
+              let priceMax = product.price;
+              if (variants.length > 1) {
+                const prices = variants.map((v: any) => parseFloat(v.price)).filter((price: number) => !isNaN(price));
+                if (prices.length > 0) {
+                  priceMin = Math.min(...prices);
+                  priceMax = Math.max(...prices);
                 }
-                
-                // Get colors
-                const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
-                
-                return {
-                  number: i + 1,
-                  title: p.title,
+              }
+              
+              // Get colors
+              const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
+              
+              output = JSON.stringify({
+                found: true,
+                count: 1,
+                exact_match: true,
+                category_emoji: categoryEmoji,
+                products: [{
+                  number: 1,
+                  title: product.title,
                   price_min: priceMin,
                   price_max: priceMax,
                   colors: colors,
                   in_stock: true
-                };
+                }]
               });
+            } else {
+              // Use limit from args, default to 20 to show ALL products
+              const limit = args.limit || 20;
               
-              output = JSON.stringify({
-                found: true,
-                count: products.length,
-                category_emoji: categoryEmoji,
-                products: enrichedProducts
-              });
+              // BUG FIX #5: Only show ACTIVE products (status='active')
+              const { data: products, error: searchError } = await supabase
+                .from("shopify_products")
+                .select("*")
+                .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
+                .eq("status", "active")  // ✅ Only active products
+                .order("price", { ascending: true })
+                .limit(limit);
+              
+              if (searchError || !products || products.length === 0) {
+                output = JSON.stringify({ 
+                  found: false, 
+                  message: `No products found for "${originalQuery}"` 
+                });
+              } else {
+                console.log(`✅ Found ${products.length} products`);
+                
+                await supabase
+                  .from("conversation_context")
+                  .upsert({
+                    phone_number: phone_number,
+                    last_product_list: products.map(p => ({ 
+                      product_id: p.product_id, 
+                      title: p.title 
+                    })),
+                  }, { onConflict: "phone_number" });
+                
+                // Parse variants to get price range and colors for each product
+                const enrichedProducts = products.map((p, i) => {
+                  const variants = JSON.parse(p.variants || "[]");
+                  
+                  // Get price range
+                  let priceMin = p.price;
+                  let priceMax = p.price;
+                  if (variants.length > 1) {
+                    const prices = variants.map((v: any) => parseFloat(v.price)).filter((price: number) => !isNaN(price));
+                    if (prices.length > 0) {
+                      priceMin = Math.min(...prices);
+                      priceMax = Math.max(...prices);
+                    }
+                  }
+                  
+                  // Get colors
+                  const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
+                  
+                  return {
+                    number: i + 1,
+                    title: p.title,
+                    price_min: priceMin,
+                    price_max: priceMax,
+                    colors: colors,
+                    in_stock: true
+                  };
+                });
+                
+                output = JSON.stringify({
+                  found: true,
+                  count: products.length,
+                  exact_match: false,
+                  category_emoji: categoryEmoji,
+                  products: enrichedProducts
+                });
+              }
             }
           }
           else if (functionName === "get_product_details") {
@@ -1234,12 +1292,24 @@ User query: ${message}`
                 if (videoMeta) videoUrl = videoMeta.value;
               }
               
+              // Get images
+              const images = JSON.parse(product.images || "[]");
+              const firstImage = images.length > 0 ? images[0] : null;
+              
+              // Get variants for colors
+              const variants = JSON.parse(product.variants || "[]");
+              const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
+              
               output = JSON.stringify({
                 found: true,
                 title: product.title,
                 price: product.price,
                 description: cleanHtmlForWhatsApp(product.description || ""),
+                image_url: firstImage,
+                colors: colors,
                 video_url: videoUrl,
+                review_rating: product.review_rating || null,
+                review_count: product.review_count || 0,
                 inventory: product.inventory
               });
             } else {
@@ -1303,12 +1373,20 @@ User query: ${message}`
               const order = orders[0];
               const shippingAddr = order.shipping_address || {};
               const city = shippingAddr.city || "your city";
+              const address1 = shippingAddr.address1 || "";
+              const address2 = shippingAddr.address2 || "";
+              const province = shippingAddr.province || "";
+              
+              // Build full address
+              let fullAddress = [address1, address2].filter(Boolean).join(", ");
+              if (!fullAddress) fullAddress = "No specific address";
               
               // Get display courier name (maps "Other" → "PostEx")
               const displayCourierName = await getCourierDisplayName(supabase, order.courier_name || "Unknown");
               
-              // Calculate scheduled ETA
-              const scheduledETA = calculateScheduledETA(order.updated_at, city);
+              // Calculate scheduled ETA based on fulfillment date
+              const fulfillmentDate = order.fulfillment_date || order.updated_at;
+              const scheduledETA = calculateScheduledETA(fulfillmentDate, city);
               
               // Fetch real-time courier tracking if available
               let courierTracking = null;
@@ -1349,9 +1427,15 @@ User query: ${message}`
               output = JSON.stringify({
                 found: true,
                 order_number: order.order_number,
+                order_date: order.created_at,
                 customer_name: order.customer_name || "Customer",
+                customer_email: order.customer_email || null,
+                customer_phone: order.customer_phone || null,
                 city: city,
+                province: province,
+                full_address: fullAddress,
                 fulfillment_status: order.fulfillment_status || "Processing",
+                fulfillment_date: order.fulfillment_date || null,
                 courier_name: displayCourierName,
                 tracking_number: order.tracking_number || null,
                 tracking_url: order.tracking_url || null,
