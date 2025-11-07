@@ -677,6 +677,74 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // ==========================================
+    // CHECK AI ENABLED (Human Takeover)
+    // ==========================================
+    const { data: aiCheck } = await supabase
+      .from("conversation_context")
+      .select("ai_enabled, taken_over_by")
+      .eq("phone_number", phone_number)
+      .single();
+
+    if (aiCheck && aiCheck.ai_enabled === false) {
+      console.log(`🚫 AI disabled for ${phone_number} - taken over by ${aiCheck.taken_over_by}`);
+      
+      // Store message in chat history but don't respond
+      await supabase.from("chat_history").insert({
+        phone_number: phone_number,
+        content: message,
+        direction: "inbound",
+        sent_by: "customer",
+        created_at: new Date().toISOString()
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "AI disabled - human handling this conversation" 
+        }), 
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // ==========================================
+    // SPEED OPTIMIZATION: Greeting Fast Path
+    // ==========================================
+    const greetingPattern = /^(salam|assalam|hi|hello|hey|good morning|good evening)$/i;
+    if (greetingPattern.test(message.trim())) {
+      console.log("⚡ Fast path: Greeting detected");
+      
+      const { data: customer } = await supabase
+        .from("conversation_context")
+        .select("customer_name")
+        .eq("phone_number", phone_number)
+        .single();
+      
+      let response;
+      if (customer?.customer_name) {
+        response = `Welcome back, ${customer.customer_name} Sir/Madam! How can I assist you today? 🌸`;
+      } else {
+        if (message.toLowerCase().includes('salam')) {
+          response = "Wa Alaikum Salam! 🌸 My name is Zaara, I'm your BOOST support AI assistant (AI can make mistakes 😊). May I know your good name please?";
+        } else {
+          response = "Hello! 👋 I'm Zaara AI Agent from Boost Lifestyle (AI can make mistakes 😊). May I kindly know your good name please?";
+        }
+      }
+      
+      await supabase.functions.invoke("send-whatsapp-message", {
+        body: { phone_number, message: response },
+      });
+      
+      return new Response(
+        JSON.stringify({ success: true, response, fast_path: "greeting" }), 
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // Check if message is a number (product selection)
     const messageNum = parseInt(message.trim());
     if (!isNaN(messageNum) && messageNum > 0) {
@@ -803,14 +871,14 @@ serve(async (req) => {
     }
     
     // Check for waitlist confirmation
-    const { data: contextCheck } = await supabase
+    const { data: waitlistCheck } = await supabase
       .from("conversation_context")
       .select("context_data, customer_name")
       .eq("phone_number", phone_number)
       .maybeSingle();
     
-    const contextData = contextCheck?.context_data || {};
-    const customerName = contextCheck?.customer_name || "";
+    const contextData = waitlistCheck?.context_data || {};
+    const customerName = waitlistCheck?.customer_name || "";
     
     if (contextData.awaiting_waitlist && message.toLowerCase().match(/^(yes|yeah|sure|ok|okay)$/)) {
       // Add to waitlist
@@ -875,19 +943,34 @@ serve(async (req) => {
     // Old Assistant (backup): asst_R7YwCRjq1BYHqGehfR9RtDFo
     console.log("🤖 Using OpenAI Assistants API with Assistant:", ASSISTANT_ID);
 
-    // Step 1: Create a thread with additional formatting instructions
-    const threadResponse = await fetch("https://api.openai.com/v1/threads", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-        "OpenAI-Beta": "assistants=v2"
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: "user",
-            content: `IMPORTANT FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
+    // ==========================================
+    // BUG FIX #3: Thread Persistence
+    // Check if we have an existing thread for this customer
+    // ==========================================
+    const { data: threadData } = await supabase
+      .from("conversation_context")
+      .select("thread_id")
+      .eq("phone_number", phone_number)
+      .single();
+
+    let threadId = threadData?.thread_id;
+
+    // Only create new thread if we don't have one
+    if (!threadId) {
+      console.log("🆕 Creating new thread for new customer...");
+      
+      const threadResponse = await fetch("https://api.openai.com/v1/threads", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2"
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: `IMPORTANT FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
 
 When showing product lists, use this EXACT format:
 "Here are all the available Boost [category], [Name] Sir/Madam! [emoji]
@@ -911,23 +994,70 @@ Use emojis: 🪑 chairs, 🎧 headphones, 🎵 earbuds, 🔊 speakers, ⌚ watch
 Bold important info: *70 hours*, *1-year warranty*, *Rs. 34,999*
 
 User query: ${message}`
-          }
-        ]
-      })
-    });
-
-    if (!threadResponse.ok) {
-      const error = await threadResponse.text();
-      console.error("❌ Thread creation failed:", error);
-      return new Response(JSON.stringify({ error: "Failed to create thread" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          ]
+        })
       });
-    }
 
-    const thread = await threadResponse.json();
-    const threadId = thread.id;
-    console.log("✅ Thread created:", threadId);
+      if (!threadResponse.ok) {
+        const error = await threadResponse.text();
+        console.error("❌ Thread creation failed:", error);
+        return new Response(JSON.stringify({ error: "Failed to create thread" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const thread = await threadResponse.json();
+      threadId = thread.id;
+      console.log("✅ New thread created:", threadId);
+      
+      // Save thread_id for future messages
+      await supabase
+        .from("conversation_context")
+        .upsert({
+          phone_number: phone_number,
+          thread_id: threadId,
+          created_at: new Date().toISOString()
+        }, { onConflict: "phone_number" });
+        
+    } else {
+      console.log("♻️ Reusing existing thread:", threadId);
+      
+      // Add new message to existing thread
+      const addMessageResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2"
+        },
+        body: JSON.stringify({
+          role: "user",
+          content: message
+        })
+      });
+      
+      if (!addMessageResponse.ok) {
+        console.error("❌ Failed to add message to thread");
+        // Thread might be invalid, create new one by clearing thread_id
+        await supabase
+          .from("conversation_context")
+          .update({ thread_id: null })
+          .eq("phone_number", phone_number);
+        
+        // Return error to retry
+        return new Response(
+          JSON.stringify({ error: "Thread invalid, please retry" }), 
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      
+      console.log("✅ Message added to existing thread");
+    }
 
     // Step 2: Run the assistant with our custom tools
     const runResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
@@ -1324,10 +1454,31 @@ User query: ${message}`
           const responseText = textContent.text.value;
           console.log("📝 Assistant response:", responseText);
 
+          // ==========================================
+          // BUG FIX #1: Replace [Name] placeholder
+          // ==========================================
+          const { data: customerData } = await supabase
+            .from("conversation_context")
+            .select("customer_name")
+            .eq("phone_number", phone_number)
+            .single();
+
+          const customerName = customerData?.customer_name || "";
+
+          // Replace [Name] placeholder with actual customer name
+          let finalMessage = responseText;
+          if (customerName) {
+            // Replace all instances of [Name] with actual name
+            finalMessage = finalMessage.replace(/\[Name\]/g, customerName);
+          } else {
+            // If no name yet, remove [Name] completely
+            finalMessage = finalMessage.replace(/\[Name\]\s*/g, "");
+          }
+
           const { data: sendData, error: sendError } = await supabase.functions.invoke(
             "send-whatsapp-message", 
             {
-              body: { phone_number, message: responseText },
+              body: { phone_number, message: finalMessage },
             }
           );
 
@@ -1345,7 +1496,7 @@ User query: ${message}`
           console.log("✅ WhatsApp message sent successfully");
 
           return new Response(
-            JSON.stringify({ success: true, response: responseText }), 
+            JSON.stringify({ success: true, response: finalMessage }), 
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             }
