@@ -699,7 +699,7 @@ serve(async (req) => {
     // Old Assistant (backup): asst_R7YwCRjq1BYHqGehfR9RtDFo
     console.log("🤖 Using OpenAI Assistants API with Assistant:", ASSISTANT_ID);
 
-    // Step 1: Create a thread
+    // Step 1: Create a thread with additional formatting instructions
     const threadResponse = await fetch("https://api.openai.com/v1/threads", {
       method: "POST",
       headers: {
@@ -711,7 +711,30 @@ serve(async (req) => {
         messages: [
           {
             role: "user",
-            content: message
+            content: `IMPORTANT FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
+
+When showing product lists, use this EXACT format:
+"Here are all the available Boost [category], [Name] Sir/Madam! [emoji]
+
+1. [Product Name]
+   💰 Price: PKR [price_min] - [price_max]
+   🎨 Colors: [color1, color2]
+   ✅ Availability: In stock
+
+2. [Product Name]
+   💰 Price: PKR [price]
+   🎨 Colors: [colors]
+   ✅ Availability: In stock
+
+[Continue for ALL products...]
+
+[Name] Sir/Madam, please choose the number for details."
+
+Use emojis: 🪑 chairs, 🎧 headphones, 🎵 earbuds, 🔊 speakers, ⌚ watches, 🔋 power banks, 🎮 gaming, 🖥️ monitors, 🖱️ mouse
+
+Bold important info: *70 hours*, *1-year warranty*, *Rs. 34,999*
+
+User query: ${message}`
           }
         ]
       })
