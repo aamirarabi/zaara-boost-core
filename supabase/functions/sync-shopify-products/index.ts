@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     console.log('Starting Shopify product sync...');
 
     let allProducts: any[] = [];
-    let url = `https://${storeUrl}/admin/api/2024-10/products.json?limit=250&fields=id,title,body_html,vendor,product_type,handle,status,tags,images,variants,metafields`;
+    let url = `https://${storeUrl}/admin/api/2024-10/products.json?limit=250&fields=id,title,body_html,vendor,product_type,handle,status,tags,images,variants`;
 
     // Fetch all products with pagination
     while (url) {
@@ -72,12 +72,46 @@ Deno.serve(async (req) => {
 
     console.log(`Total products fetched: ${allProducts.length}`);
 
+    // Fetch metafields for each product to get Judge.me ratings
+    console.log('Fetching metafields for products...');
+    for (const product of allProducts) {
+      try {
+        const metafieldsUrl = `https://${storeUrl}/admin/api/2024-10/products/${product.id}/metafields.json?namespace=judgeme`;
+        const metaRes = await fetch(metafieldsUrl, {
+          headers: { 'X-Shopify-Access-Token': token },
+        });
+        
+        if (metaRes.ok) {
+          const metaData = await metaRes.json();
+          product.judgeme_metafields = metaData.metafields || [];
+        }
+      } catch (error) {
+        console.error(`Error fetching metafields for product ${product.id}:`, error);
+      }
+    }
+
     // Transform products for database
     const productsToUpsert = allProducts.map((p) => {
-      // Extract metafields
+      // Extract Judge.me rating from metafields
+      let reviewRating = null;
+      let reviewCount = 0;
+      
+      if (p.judgeme_metafields && p.judgeme_metafields.length > 0) {
+        const ratingMeta = p.judgeme_metafields.find((m: any) => m.key === 'rating');
+        const countMeta = p.judgeme_metafields.find((m: any) => m.key === 'rating_count');
+        
+        if (ratingMeta?.value) {
+          reviewRating = parseFloat(ratingMeta.value);
+        }
+        if (countMeta?.value) {
+          reviewCount = parseInt(countMeta.value) || 0;
+        }
+      }
+      
+      // Extract other metafields
       const metafieldsObj: any = {};
-      if (p.metafields) {
-        p.metafields.forEach((mf: any) => {
+      if (p.judgeme_metafields) {
+        p.judgeme_metafields.forEach((mf: any) => {
           metafieldsObj[mf.key] = mf.value;
         });
       }
@@ -101,6 +135,8 @@ Deno.serve(async (req) => {
         inventory: p.variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0),
         metafields: metafieldsObj,
         all_images: allImages,
+        review_rating: reviewRating,
+        review_count: reviewCount,
         synced_at: new Date().toISOString(),
       };
     });

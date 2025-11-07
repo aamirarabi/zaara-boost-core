@@ -658,6 +658,8 @@ export type Database = {
           product_id: string
           product_type: string | null
           published_at: string | null
+          review_count: number | null
+          review_rating: number | null
           shopify_id: string | null
           status: string | null
           synced_at: string | null
@@ -681,6 +683,8 @@ export type Database = {
           product_id: string
           product_type?: string | null
           published_at?: string | null
+          review_count?: number | null
+          review_rating?: number | null
           shopify_id?: string | null
           status?: string | null
           synced_at?: string | null
@@ -704,6 +708,8 @@ export type Database = {
           product_id?: string
           product_type?: string | null
           published_at?: string | null
+          review_count?: number | null
+          review_rating?: number | null
           shopify_id?: string | null
           status?: string | null
           synced_at?: string | null

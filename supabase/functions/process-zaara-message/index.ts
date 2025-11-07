@@ -845,6 +845,13 @@ serve(async (req) => {
               detailsText += `✨ Key Features:\n${features.join("\n")}\n\n`;
             }
             
+            // Add review rating if available
+            if (product.review_rating && product.review_count > 0) {
+              const stars = '⭐'.repeat(Math.round(product.review_rating));
+              detailsText += `${stars} ${product.review_rating.toFixed(1)}/5 (${product.review_count} reviews)\n`;
+              detailsText += `💚 Customers love this product!\n\n`;
+            }
+            
             if (videoUrl) {
               detailsText += `📹 Video: ${videoUrl}\n\n`;
             }
