@@ -1221,7 +1221,13 @@ User query: ${message}`
               
               // Fetch FAQ videos related to this product
               const productTitle = product.title.toLowerCase();
-              const productTags = (product.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
+              // Handle tags - could be string, array, or null
+              let productTags: string[] = [];
+              if (typeof product.tags === 'string') {
+                productTags = product.tags.toLowerCase().split(',').map((t: string) => t.trim());
+              } else if (Array.isArray(product.tags)) {
+                productTags = product.tags.map((t: string) => t.toLowerCase().trim());
+              }
 
               console.log(`🔍 Searching for FAQ videos related to: ${product.title}`);
 
