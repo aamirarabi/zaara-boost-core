@@ -71,13 +71,13 @@ serve(async (req) => {
         let productReviewCount = 0;
         const MAX_PAGES_PER_PRODUCT = 10; // Limit to prevent timeout
 
-        // Paginate through reviews for this product (max 10 pages = 1000 reviews)
+        // Fetch ALL reviews (Judge.me API doesn't support external_product_id filtering)
+        // We'll filter by product_external_id in the response
         while (hasMoreReviews && page <= MAX_PAGES_PER_PRODUCT) {
           const reviewsUrl = `https://judge.me/api/v1/reviews`;
           const params = new URLSearchParams({
             api_token: settings.private_token,
             shop_domain: settings.shop_domain,
-            external_product_id: product.shopify_id,
             per_page: "100",
             page: page.toString(),
           });
@@ -97,9 +97,14 @@ serve(async (req) => {
           }
 
           const data = await response.json();
-          const reviews = data.reviews || [];
+          const allReviews = data.reviews || [];
           
-          console.log(`   ✅ Found ${reviews.length} reviews`);
+          // CRITICAL FIX: Filter reviews by product_external_id from the response
+          const reviews = allReviews.filter((review: any) => 
+            review.product_external_id?.toString() === product.shopify_id?.toString()
+          );
+          
+          console.log(`   ✅ Found ${allReviews.length} total reviews, ${reviews.length} for this product`);
           
           if (reviews.length === 0) {
             if (page === 1) {
