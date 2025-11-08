@@ -198,12 +198,15 @@ Here are your order details, [Customer Name] Sir/Madam! 📦
 
 [If actual_delivered_at does NOT exist - PACKAGE IN TRANSIT:]
 
-**🚀 KEY DATES:**
-• 📦 Dispatched: [dispatch_date_formatted] [if dispatch_date exists, else show "Pending fulfillment"]
-• 📅 Estimated Delivery: [scheduled_eta formatted as "DD MMM YYYY"]
-[If courier_eta exists and is different from scheduled_eta:]
-• 🚚 Courier Real-Time ETA: [courier_eta formatted as "DD MMM YYYY, HH:MM AM/PM"]
-  Status: [delivery_status emoji + text]
+**🚀 SHIPMENT TIMELINE:**
+📦 Dispatched: [dispatch_date_formatted] [if dispatch_date exists, else show "Awaiting dispatch from warehouse"]
+
+**📅 DELIVERY INFORMATION:**
+[If both scheduled_eta AND courier_eta exist:]
+Your order will arrive by *[scheduled_eta formatted as "DD MMM YYYY"]*. [If courier_eta is earlier:] Good news! Courier estimates delivery on *[courier_eta formatted as "DD MMM YYYY"]* ([calculate days difference] days early! 🎉) [If courier_eta is same or later:] Courier confirms delivery by *[courier_eta formatted as "DD MMM YYYY"]*.
+
+[If only scheduled_eta exists and NO courier_eta:]
+Expected delivery: *[scheduled_eta formatted as "DD MMM YYYY"]* ([scheduled_days] days from dispatch)
 
 [If courier_status exists:]
 📍 Current Status: [courier_status]
