@@ -75,6 +75,27 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "save_customer_name",
+      description: "Save customer's name to database when they provide it during conversation. This ensures we remember them for future interactions.",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_name: { 
+            type: "string", 
+            description: "Full customer name as provided by them (e.g., 'Ahmed Khan', 'Fatima Ali')" 
+          },
+          phone_number: {
+            type: "string",
+            description: "Customer's phone number from the conversation"
+          }
+        },
+        required: ["customer_name", "phone_number"],
+      },
+    },
+  },
 ];
 
 // Comprehensive keyword mapping for ALL Boost Lifestyle products
@@ -803,11 +824,12 @@ serve(async (req) => {
     // ==========================================
     const { data: threadData } = await supabase
       .from("conversation_context")
-      .select("thread_id")
+      .select("thread_id, customer_name")
       .eq("phone_number", phone_number)
-      .single();
+      .maybeSingle();
 
     let threadId = threadData?.thread_id;
+    const contextCustomerName = threadData?.customer_name || customerName;
 
     // Only create new thread if we don't have one
     if (!threadId) {
@@ -824,10 +846,14 @@ serve(async (req) => {
           messages: [
             {
               role: "user",
-              content: `IMPORTANT FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
+              content: `${contextCustomerName ? `CUSTOMER INFO: Name is "${contextCustomerName}".` : 'NEW CUSTOMER: Name not yet collected.'}
+
+Customer Phone: ${phone_number}
+
+IMPORTANT FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
 
 When showing product lists, use this EXACT format:
-"Here are all the available Boost [category], [Name] Sir/Madam! [emoji]
+"Here are all the available Boost [category], ${contextCustomerName ? contextCustomerName + ' Sir/Madam' : 'Sir/Madam'}! [emoji]
 
 1. [Product Name]
    💰 Price: PKR [price_min] - [price_max]
@@ -841,11 +867,13 @@ When showing product lists, use this EXACT format:
 
 [Continue for ALL products...]
 
-[Name] Sir/Madam, please choose the number for details."
+${contextCustomerName ? contextCustomerName + ' Sir/Madam' : 'Sir/Madam'}, please choose the number for details."
 
 Use emojis: 🪑 chairs, 🎧 headphones, 🎵 earbuds, 🔊 speakers, ⌚ watches, 🔋 power banks, 🎮 gaming, 🖥️ monitors, 🖱️ mouse
 
 Bold important info: *70 hours*, *1-year warranty*, *Rs. 34,999*
+
+${!contextCustomerName ? '\nIMPORTANT: After greeting, ask for customer name politely and use save_customer_name tool to save it.' : ''}
 
 User query: ${message}`
             }
@@ -1420,6 +1448,45 @@ User query: ${message}`
               output = JSON.stringify({
                 found: false,
                 message: `No FAQ found for "${searchTerm}"`
+              });
+            }
+          }
+          else if (functionName === "save_customer_name") {
+            const customerNameToSave = args.customer_name;
+            const phoneNumberToSave = args.phone_number;
+            
+            console.log(`💾 Saving customer name: ${customerNameToSave} for ${phoneNumberToSave}`);
+            
+            try {
+              // Update customers table
+              await supabase
+                .from("customers")
+                .update({
+                  customer_name: customerNameToSave,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("phone_number", phoneNumberToSave);
+              
+              // Update conversation context
+              await supabase
+                .from("conversation_context")
+                .upsert({
+                  phone_number: phoneNumberToSave,
+                  customer_name: customerNameToSave,
+                  updated_at: new Date().toISOString()
+                }, { onConflict: "phone_number" });
+              
+              console.log(`✅ Customer name saved successfully`);
+              
+              output = JSON.stringify({
+                success: true,
+                message: `Customer name "${customerNameToSave}" saved successfully`
+              });
+            } catch (error) {
+              console.error("❌ Error saving customer name:", error);
+              output = JSON.stringify({
+                success: false,
+                message: "Failed to save customer name"
               });
             }
           }
