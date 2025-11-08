@@ -469,37 +469,76 @@ async function getLeopardsTracking(supabase: any, trackingNumber: string): Promi
   status: string;
 } | null> {
   try {
-    // Get API key from courier_settings
+    console.log("🐆 Fetching Leopards tracking for:", trackingNumber);
+    
+    // Get API credentials from courier_settings
     const { data: settings } = await supabase
       .from("courier_settings")
-      .select("api_key, api_endpoint")
+      .select("api_key, api_password, api_endpoint")
       .eq("courier_name", "Leopards")
       .single();
     
-    if (!settings?.api_key) {
-      console.error("❌ Leopards API key not configured");
+    if (!settings?.api_key || !settings?.api_password) {
+      console.error("❌ Leopards API credentials not configured");
       return null;
     }
     
-    const response = await fetch(`${settings.api_endpoint}/${trackingNumber}`, {
-      method: "GET",
+    console.log("✅ Leopards credentials loaded");
+    
+    // Leopards API uses POST with form-urlencoded parameters
+    const url = settings.api_endpoint;
+    const formData = new URLSearchParams({
+      'api_key': settings.api_key,
+      'api_password': settings.api_password,
+      'track_numbers': trackingNumber
+    });
+    
+    console.log("📡 Calling Leopards API...");
+    
+    const response = await fetch(url, {
+      method: "POST",
       headers: {
-        "Authorization": `Bearer ${settings.api_key}`,
-        "Content-Type": "application/json"
-      }
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: formData.toString()
     });
     
     if (!response.ok) {
-      console.error("❌ Leopards API error:", response.status);
+      console.error("❌ Leopards API HTTP error:", response.status);
       return null;
     }
     
     const data = await response.json();
+    console.log("📦 Leopards API response:", JSON.stringify(data, null, 2));
     
-    return {
-      estimatedDate: data.expected_delivery_date || null,
-      status: data.status || "In Transit"
+    // Check API response status
+    if (data.status !== 1 || data.error !== 0) {
+      console.error("❌ Leopards API returned error:", data);
+      return null;
+    }
+    
+    // Get packet data
+    const packets = data.packet_list || [];
+    if (packets.length === 0) {
+      console.error("❌ No packet data in response");
+      return null;
+    }
+    
+    const packet = packets[0];
+    console.log("📦 Packet status:", packet.booked_packet_status);
+    
+    // Get latest tracking detail
+    const trackingDetails = packet['Tracking Detail'] || [];
+    const latestDetail = trackingDetails[trackingDetails.length - 1];
+    
+    const result = {
+      estimatedDate: latestDetail?.Activity_datetime || null,
+      status: packet.booked_packet_status || "In Transit"
     };
+    
+    console.log("✅ Leopards tracking result:", result);
+    return result;
+    
   } catch (error) {
     console.error("❌ Leopards tracking error:", error);
     return null;

@@ -147,6 +147,7 @@ export type Database = {
         Row: {
           api_endpoint: string | null
           api_key: string | null
+          api_password: string | null
           courier_name: string
           created_at: string | null
           display_name: string
@@ -159,6 +160,7 @@ export type Database = {
         Insert: {
           api_endpoint?: string | null
           api_key?: string | null
+          api_password?: string | null
           courier_name: string
           created_at?: string | null
           display_name: string
@@ -171,6 +173,7 @@ export type Database = {
         Update: {
           api_endpoint?: string | null
           api_key?: string | null
+          api_password?: string | null
           courier_name?: string
           created_at?: string | null
           display_name?: string
