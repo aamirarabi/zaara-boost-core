@@ -30,10 +30,10 @@ const Reviews = () => {
   const loadData = async () => {
     setLoading(true);
     
-    // Get all reviews
+    // Get all reviews (using correct column name: shopify_product_id)
     const { data: reviewsData } = await supabase
       .from("product_reviews")
-      .select("product_id, rating");
+      .select("shopify_product_id, rating");
     
     if (!reviewsData || reviewsData.length === 0) {
       setProducts([]);
@@ -42,18 +42,18 @@ const Reviews = () => {
     }
     
     // Get unique product IDs
-    const productIds = [...new Set(reviewsData.map(r => r.product_id))];
+    const productIds = [...new Set(reviewsData.map(r => r.shopify_product_id))];
     
-    // Get products
+    // Get products (joining by shopify_id column)
     const { data: productsData } = await supabase
       .from("shopify_products")
-      .select("product_id, title, images, handle")
-      .in("product_id", productIds);
+      .select("shopify_id, product_id, title, images, handle")
+      .in("shopify_id", productIds);
     
     if (productsData) {
       // Calculate ratings for each product
       const enrichedProducts = productsData.map(product => {
-        const productReviews = reviewsData.filter(r => r.product_id === product.product_id);
+        const productReviews = reviewsData.filter(r => r.shopify_product_id === product.shopify_id);
         const totalRating = productReviews.reduce((sum, r) => sum + r.rating, 0);
         const avgRating = productReviews.length > 0 ? totalRating / productReviews.length : 0;
         

@@ -412,55 +412,55 @@ export type Database = {
       }
       product_reviews: {
         Row: {
-          created_at: string | null
-          customer_email: string | null
-          customer_name: string
-          helpful_count: number | null
+          body: string | null
+          created_at_judgeme: string | null
           id: string
-          judge_me_id: string | null
+          judgeme_id: string
           pictures: Json | null
-          product_id: string
-          product_title: string | null
+          product_handle: string
           rating: number
-          review_date: string
-          review_text: string | null
-          review_title: string | null
-          updated_at: string | null
-          verified_purchase: boolean | null
+          reviewer_email: string | null
+          reviewer_location: string | null
+          reviewer_name: string
+          shopify_product_id: string
+          synced_at: string | null
+          title: string | null
+          updated_at_judgeme: string | null
+          verified_buyer: boolean | null
         }
         Insert: {
-          created_at?: string | null
-          customer_email?: string | null
-          customer_name: string
-          helpful_count?: number | null
+          body?: string | null
+          created_at_judgeme?: string | null
           id?: string
-          judge_me_id?: string | null
+          judgeme_id: string
           pictures?: Json | null
-          product_id: string
-          product_title?: string | null
+          product_handle: string
           rating: number
-          review_date: string
-          review_text?: string | null
-          review_title?: string | null
-          updated_at?: string | null
-          verified_purchase?: boolean | null
+          reviewer_email?: string | null
+          reviewer_location?: string | null
+          reviewer_name?: string
+          shopify_product_id: string
+          synced_at?: string | null
+          title?: string | null
+          updated_at_judgeme?: string | null
+          verified_buyer?: boolean | null
         }
         Update: {
-          created_at?: string | null
-          customer_email?: string | null
-          customer_name?: string
-          helpful_count?: number | null
+          body?: string | null
+          created_at_judgeme?: string | null
           id?: string
-          judge_me_id?: string | null
+          judgeme_id?: string
           pictures?: Json | null
-          product_id?: string
-          product_title?: string | null
+          product_handle?: string
           rating?: number
-          review_date?: string
-          review_text?: string | null
-          review_title?: string | null
-          updated_at?: string | null
-          verified_purchase?: boolean | null
+          reviewer_email?: string | null
+          reviewer_location?: string | null
+          reviewer_name?: string
+          shopify_product_id?: string
+          synced_at?: string | null
+          title?: string | null
+          updated_at_judgeme?: string | null
+          verified_buyer?: boolean | null
         }
         Relationships: []
       }
@@ -520,60 +520,6 @@ export type Database = {
           id?: string
           message?: string
           title?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      review_analytics: {
-        Row: {
-          average_rating: number | null
-          common_complaints: string[] | null
-          common_compliments: string[] | null
-          created_at: string | null
-          five_star_count: number | null
-          four_star_count: number | null
-          id: string
-          last_synced_at: string | null
-          one_star_count: number | null
-          product_id: string
-          product_title: string | null
-          three_star_count: number | null
-          total_reviews: number | null
-          two_star_count: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          average_rating?: number | null
-          common_complaints?: string[] | null
-          common_compliments?: string[] | null
-          created_at?: string | null
-          five_star_count?: number | null
-          four_star_count?: number | null
-          id?: string
-          last_synced_at?: string | null
-          one_star_count?: number | null
-          product_id: string
-          product_title?: string | null
-          three_star_count?: number | null
-          total_reviews?: number | null
-          two_star_count?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          average_rating?: number | null
-          common_complaints?: string[] | null
-          common_compliments?: string[] | null
-          created_at?: string | null
-          five_star_count?: number | null
-          four_star_count?: number | null
-          id?: string
-          last_synced_at?: string | null
-          one_star_count?: number | null
-          product_id?: string
-          product_title?: string | null
-          three_star_count?: number | null
-          total_reviews?: number | null
-          two_star_count?: number | null
           updated_at?: string | null
         }
         Relationships: []
