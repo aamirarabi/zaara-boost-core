@@ -526,6 +526,7 @@ export type Database = {
       }
       shopify_orders: {
         Row: {
+          actual_delivered_at: string | null
           billing_address: Json | null
           courier_name: string | null
           created_at: string | null
@@ -534,6 +535,10 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
+          delivered_to_name: string | null
+          delivered_to_relation: string | null
+          delivery_notes: string | null
+          delivery_proof_url: string | null
           delivery_status: string | null
           estimated_delivery_date: string | null
           financial_status: string | null
@@ -556,6 +561,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          actual_delivered_at?: string | null
           billing_address?: Json | null
           courier_name?: string | null
           created_at?: string | null
@@ -564,6 +570,10 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          delivered_to_name?: string | null
+          delivered_to_relation?: string | null
+          delivery_notes?: string | null
+          delivery_proof_url?: string | null
           delivery_status?: string | null
           estimated_delivery_date?: string | null
           financial_status?: string | null
@@ -586,6 +596,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          actual_delivered_at?: string | null
           billing_address?: Json | null
           courier_name?: string | null
           created_at?: string | null
@@ -594,6 +605,10 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          delivered_to_name?: string | null
+          delivered_to_relation?: string | null
+          delivery_notes?: string | null
+          delivery_proof_url?: string | null
           delivery_status?: string | null
           estimated_delivery_date?: string | null
           financial_status?: string | null

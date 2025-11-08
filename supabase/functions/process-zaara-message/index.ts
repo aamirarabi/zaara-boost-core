@@ -1528,7 +1528,14 @@ User query: ${message}`
                 delivery_status: deliveryStatus,
                 financial_status: order.financial_status,
                 total_price: order.total_price,
-                line_items: order.line_items
+                line_items: order.line_items,
+                // Delivery confirmation fields
+                actual_delivered_at: order.actual_delivered_at || null,
+                actual_delivered_at_formatted: formatDate(order.actual_delivered_at),
+                delivered_to_name: order.delivered_to_name || null,
+                delivered_to_relation: order.delivered_to_relation || null,
+                delivery_proof_url: order.delivery_proof_url || null,
+                delivery_notes: order.delivery_notes || null
               });
             } else {
               output = JSON.stringify({
