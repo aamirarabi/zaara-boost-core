@@ -30,15 +30,44 @@ const Reviews = () => {
   const loadData = async () => {
     setLoading(true);
     
+    // Get all reviews
+    const { data: reviewsData } = await supabase
+      .from("product_reviews")
+      .select("product_id, rating");
+    
+    if (!reviewsData || reviewsData.length === 0) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+    
+    // Get unique product IDs
+    const productIds = [...new Set(reviewsData.map(r => r.product_id))];
+    
+    // Get products
     const { data: productsData } = await supabase
       .from("shopify_products")
-      .select("product_id, title, review_rating, review_count, images, handle")
-      .not("review_count", "is", null)
-      .gt("review_count", 0)
-      .order("review_count", { ascending: false });
+      .select("product_id, title, images, handle")
+      .in("product_id", productIds);
     
     if (productsData) {
-      setProducts(productsData);
+      // Calculate ratings for each product
+      const enrichedProducts = productsData.map(product => {
+        const productReviews = reviewsData.filter(r => r.product_id === product.product_id);
+        const totalRating = productReviews.reduce((sum, r) => sum + r.rating, 0);
+        const avgRating = productReviews.length > 0 ? totalRating / productReviews.length : 0;
+        
+        return {
+          product_id: product.product_id,
+          title: product.title,
+          images: product.images,
+          handle: product.handle,
+          review_rating: avgRating,
+          review_count: productReviews.length
+        };
+      }).sort((a, b) => b.review_count - a.review_count);
+      
+      setProducts(enrichedProducts);
     }
     
     setLoading(false);
@@ -46,11 +75,11 @@ const Reviews = () => {
 
   const syncProducts = async () => {
     setSyncing(true);
-    toast("Syncing Products", {
-      description: "Fetching latest products from Shopify (includes Judge.me reviews)...",
+    toast("Syncing Reviews", {
+      description: "Fetching reviews from Judge.me...",
     });
 
-    const { data, error } = await supabase.functions.invoke("sync-shopify-products");
+    const { data, error } = await supabase.functions.invoke("sync-judgeme-reviews");
 
     if (error) {
       toast("Sync Failed", {
@@ -62,7 +91,7 @@ const Reviews = () => {
       });
     } else {
       toast("Sync Complete", {
-        description: data.message || `Synced ${data.count} products with reviews`,
+        description: `Synced ${data.syncedReviews} reviews from ${data.productsProcessed} products`,
       });
       loadData();
     }

@@ -1233,6 +1233,28 @@ User query: ${message}`
                     })),
                   }, { onConflict: "phone_number" });
                 
+                // Fetch reviews for each product
+                for (const product of products) {
+                  const { data: reviews } = await supabase
+                    .from("product_reviews")
+                    .select("rating, title, body, reviewer_name, reviewer_location, verified_buyer, pictures, created_at_judgeme")
+                    .eq("shopify_product_id", product.shopify_id)
+                    .order("rating", { ascending: false })
+                    .order("created_at_judgeme", { ascending: false })
+                    .limit(5);
+
+                  if (reviews && reviews.length > 0) {
+                    const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+                    product.average_rating = (totalRating / reviews.length).toFixed(1);
+                    product.review_count = reviews.length;
+                    product.reviews = reviews;
+                  } else {
+                    product.average_rating = null;
+                    product.review_count = 0;
+                    product.reviews = [];
+                  }
+                }
+                
                 // Parse variants to get price range and colors for each product
                 const enrichedProducts = products.map((p, i) => {
                   const variants = JSON.parse(p.variants || "[]");
@@ -1257,7 +1279,10 @@ User query: ${message}`
                     price_min: priceMin,
                     price_max: priceMax,
                     colors: colors,
-                    in_stock: true
+                    in_stock: true,
+                    average_rating: p.average_rating,
+                    review_count: p.review_count,
+                    reviews: p.reviews
                   };
                 });
                 

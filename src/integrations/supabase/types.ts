@@ -344,6 +344,39 @@ export type Database = {
         }
         Relationships: []
       }
+      judgeme_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          private_token: string
+          public_token: string
+          shop_domain: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          private_token: string
+          public_token: string
+          shop_domain: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          private_token?: string
+          public_token?: string
+          shop_domain?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       message_analytics: {
         Row: {
           avg_response_time_seconds: number | null
