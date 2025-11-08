@@ -91,7 +91,7 @@ const Reviews = () => {
       });
     } else {
       toast("Sync Complete", {
-        description: `Synced ${data.syncedReviews} reviews from ${data.productsProcessed} products`,
+        description: `Synced ${data.syncedReviews} reviews from ${data.productsWithReviews} products with reviews (${data.totalProducts} products checked)`,
       });
       loadData();
     }

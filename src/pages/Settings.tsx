@@ -357,6 +357,7 @@ const Settings = () => {
                         courier_name: "",
                         display_name: "",
                         api_key: "",
+                        api_password: "",
                         api_endpoint: "",
                         karachi_delivery_days: 2,
                         outside_karachi_delivery_days: 5,
@@ -404,6 +405,18 @@ const Settings = () => {
                           placeholder="API Key"
                         />
                       </div>
+                      {editingCourier.courier_name === "Leopards" && (
+                        <div className="space-y-2">
+                          <Label>API Password</Label>
+                          <Input
+                            type="password"
+                            value={editingCourier.api_password || ""}
+                            onChange={(e) => setEditingCourier({...editingCourier, api_password: e.target.value})}
+                            placeholder="Enter Leopards API password"
+                          />
+                          <p className="text-xs text-muted-foreground">Required for Leopards courier tracking</p>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label>API Endpoint</Label>
                         <Input
@@ -452,28 +465,39 @@ const Settings = () => {
             </div>
 
             <div className="space-y-3">
-              {courierSettings.map((courier) => (
-                <div key={courier.id} className="p-4 border rounded-lg">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold">{courier.display_name}</h3>
-                        {courier.is_active ? (
-                          <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Active</span>
-                        ) : (
-                          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">Inactive</span>
+              {courierSettings.map((courier) => {
+                const displayName = courier.courier_name === "Other" 
+                  ? `PostEx (Courier ID: Other)` 
+                  : courier.display_name;
+                const showNote = courier.courier_name === "Other" 
+                  ? "PostEx is stored as 'Other' in Shopify" 
+                  : courier.courier_name === "Leopards"
+                  ? "Requires both API key and password"
+                  : "No password needed ✓";
+                
+                return (
+                  <div key={courier.id} className="p-4 border rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold">{displayName}</h3>
+                          {courier.is_active ? (
+                            <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Active</span>
+                          ) : (
+                            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">Inactive</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Karachi: {courier.karachi_delivery_days} days | 
+                          Outside: {courier.outside_karachi_delivery_days} days
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">{showNote}</p>
+                        {courier.api_endpoint && (
+                          <p className="text-xs text-muted-foreground mt-1 font-mono">
+                            {courier.api_endpoint}
+                          </p>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Karachi: {courier.karachi_delivery_days} days | 
-                        Outside: {courier.outside_karachi_delivery_days} days
-                      </p>
-                      {courier.api_endpoint && (
-                        <p className="text-xs text-muted-foreground mt-1 font-mono">
-                          {courier.api_endpoint}
-                        </p>
-                      )}
-                    </div>
                     <div className="flex gap-2">
                       <Button
                         size="icon"
@@ -497,9 +521,10 @@ const Settings = () => {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

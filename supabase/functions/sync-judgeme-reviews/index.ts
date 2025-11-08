@@ -48,16 +48,18 @@ serve(async (req) => {
       );
     }
 
-    console.log(`📦 Found ${products.length} products`);
+    console.log(`📦 Processing ${products.length} products...`);
 
     let totalReviews = 0;
     let syncedReviews = 0;
     let errors = 0;
+    let productsWithReviews = 0;
+    const reviewsPerProduct: Array<{ product: string; reviews: number }> = [];
 
     // Sync reviews for each product
     for (const product of products) {
       try {
-        console.log(`   Syncing: ${product.title}`);
+        console.log(`   📝 ${product.title}...`);
 
         const reviewsUrl = `https://judge.me/api/v1/reviews`;
         const params = new URLSearchParams({
@@ -70,7 +72,7 @@ serve(async (req) => {
         const response = await fetch(`${reviewsUrl}?${params.toString()}`);
         
         if (!response.ok) {
-          console.error(`   ❌ API error: ${response.status}`);
+          console.error(`   ❌ API error for ${product.title}: ${response.status}`);
           errors++;
           continue;
         }
@@ -78,7 +80,13 @@ serve(async (req) => {
         const data = await response.json();
         const reviews = data.reviews || [];
         
-        console.log(`   Found ${reviews.length} reviews`);
+        console.log(`   ✅ Found ${reviews.length} reviews`);
+        
+        if (reviews.length > 0) {
+          productsWithReviews++;
+          reviewsPerProduct.push({ product: product.title, reviews: reviews.length });
+        }
+        
         totalReviews += reviews.length;
 
         for (const review of reviews) {
@@ -117,8 +125,12 @@ serve(async (req) => {
             errors++;
           }
         }
+        
+        if (reviews.length > 0) {
+          console.log(`   💾 Synced ${reviews.length} reviews for ${product.title}`);
+        }
       } catch (err) {
-        console.error(`   ❌ Product sync error:`, err);
+        console.error(`   ❌ Product sync error for ${product.title}:`, err);
         errors++;
       }
     }
@@ -131,13 +143,16 @@ serve(async (req) => {
 
     const summary = {
       success: true,
+      totalProducts: products.length,
+      productsWithReviews,
       totalReviews,
       syncedReviews,
-      productsProcessed: products.length,
+      reviewsPerProduct: reviewsPerProduct.slice(0, 10), // Top 10
       errors,
       timestamp: new Date().toISOString(),
     };
 
+    console.log(`✨ SUMMARY: ${totalReviews} reviews across ${productsWithReviews} products`);
     console.log("✅ Sync complete:", summary);
 
     return new Response(
