@@ -170,10 +170,9 @@ Here are your order details, [Customer Name] Sir/Madam! 📦
 
 **Order #[order_number]**
 👤 [customer_name]
-📅 Order Date: [order_date formatted as "DD MMM YYYY"]
-🏙️ [city], [province]
-
-🚚 **Courier:** [courier_name]
+📅 Order Date: [order_date_formatted]
+🚚 Courier: [courier_name]
+🏙️ Shipping to: [city], [province]
 
 **ITEMS ORDERED:**
 [Parse line_items JSON and format each item as:]
@@ -189,24 +188,25 @@ Here are your order details, [Customer Name] Sir/Madam! 📦
 **📦 DELIVERY STATUS:**
 
 [If actual_delivered_at exists - PACKAGE WAS DELIVERED:]
-✅ *DELIVERED* on [actual_delivered_at_formatted] at [time from actual_delivered_at]
+✅ *DELIVERED SUCCESSFULLY*
+📅 Delivered: [actual_delivered_at_formatted] at [time from actual_delivered_at in HH:MM AM/PM format]
 👤 Received by: [delivered_to_name] ([delivered_to_relation])
 [If delivery_notes exists:]
-📝 Delivery Notes: [delivery_notes]
+📝 Notes: [delivery_notes]
 [If delivery_proof_url exists:]
-📸 Delivery Proof: [delivery_proof_url]
+📸 Proof: [delivery_proof_url]
 
 [If actual_delivered_at does NOT exist - PACKAGE IN TRANSIT:]
-**📅 DELIVERY ESTIMATES:**
-✅ Scheduled: [scheduled_eta]
-  ([scheduled_days] days from order dispatch)
 
-[If courier_eta exists:]
-📍 Real-Time Courier ETA: [courier_eta]
-  Status: [delivery_status]
+**🚀 KEY DATES:**
+• 📦 Dispatched: [dispatch_date_formatted] [if dispatch_date exists, else show "Pending fulfillment"]
+• 📅 Estimated Delivery: [scheduled_eta formatted as "DD MMM YYYY"]
+[If courier_eta exists and is different from scheduled_eta:]
+• 🚚 Courier Real-Time ETA: [courier_eta formatted as "DD MMM YYYY, HH:MM AM/PM"]
+  Status: [delivery_status emoji + text]
 
 [If courier_status exists:]
-📦 Current Status: [courier_status]
+📍 Current Status: [courier_status]
 
 💳 **Payment Status:** [financial_status]
 
@@ -214,21 +214,23 @@ Here are your order details, [Customer Name] Sir/Madam! 📦
 💰 **PAYMENT REMINDER**: Please keep PKR *[total_price]* ready for cash on delivery. Our rider will collect payment upon delivery.
 
 [If actual_delivered_at exists AND financial_status is still "Pending":]
-⚠️ **PAYMENT STATUS**: Payment of PKR *[total_price]* was pending at delivery. Please confirm if payment was made to the rider.
+⚠️ **PAYMENT CONFIRMATION NEEDED**: Payment of PKR *[total_price]* should have been collected at delivery. Please confirm if you paid the rider.
 
 🔗 **Track Live:** [tracking_url]
 
 Anything else I can help with, [Customer Name] Sir/Madam? 😊
 
 ### CRITICAL RULES FOR ORDER TRACKING:
-- **FIRST CHECK**: If actual_delivered_at exists, the package WAS DELIVERED - show delivery confirmation section with exact date/time, who received it, and any delivery notes
-- If actual_delivered_at is NULL, package is IN TRANSIT - show scheduled ETA and courier tracking
-- Always show **Order Date** and **Dispatch Date** if fulfillment_date exists
+- **FIRST CHECK**: If actual_delivered_at exists, the package WAS DELIVERED - show delivery confirmation section with exact date/time, who received it
+- If actual_delivered_at is NULL, package is IN TRANSIT - show KEY DATES section prominently
+- **DISPATCH DATE**: Always show dispatch_date_formatted prominently in KEY DATES section. If null, show "Pending fulfillment"
+- **ESTIMATED DELIVERY**: Always show scheduled_eta in DD MMM YYYY format (e.g., "11 Nov 2025")
+- **COURIER ETA**: If courier_eta exists, format it as "DD MMM YYYY, HH:MM AM/PM" (e.g., "8 Nov 2025, 10:18 AM")
+- **DATE FORMATTING**: Convert all timestamps to readable format - use formatDate for dates, convert time to 12-hour format with AM/PM
+- **KEY DATES SECTION**: This must be the most prominent section after order header - use it to show the 2 most important dates
 - Always show full **SHIPPING ADDRESS** section with full_address, city, province
 - Always show **ITEMS ORDERED** section with all line items parsed from JSON
 - Show customer_email and customer_phone if available
-- Calculate days properly between order date and scheduled_eta
-- If courier_eta is different from scheduled_eta, show both clearly labeled
 - **DELIVERY CONFIRMATION PRIORITY**: When actual_delivered_at exists, make it VERY CLEAR the package was delivered, when, and to whom
 - **ALWAYS include PAYMENT REMINDER for COD/Pending orders** - but only if NOT yet delivered
 - For delivered COD orders with pending payment, ask for confirmation that payment was made
