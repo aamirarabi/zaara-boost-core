@@ -57,19 +57,22 @@ serve(async (req) => {
     const syncResults: Array<{ product: string; status: string; reviews: number }> = [];
 
     // Process EACH product individually, never stop early
-    for (const product of products) {
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      
       try {
         console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📦 [${products.indexOf(product) + 1}/${products.length}] Processing: ${product.title}`);
+        console.log(`📦 [${i + 1}/${products.length}] Processing: ${product.title}`);
         console.log(`   Shopify ID: ${product.shopify_id}`);
         console.log(`   Handle: ${product.handle}`);
 
         let page = 1;
         let hasMoreReviews = true;
         let productReviewCount = 0;
+        const MAX_PAGES_PER_PRODUCT = 10; // Limit to prevent timeout
 
-        // Paginate through all reviews for this product
-        while (hasMoreReviews) {
+        // Paginate through reviews for this product (max 10 pages = 1000 reviews)
+        while (hasMoreReviews && page <= MAX_PAGES_PER_PRODUCT) {
           const reviewsUrl = `https://judge.me/api/v1/reviews`;
           const params = new URLSearchParams({
             api_token: settings.private_token,
@@ -79,13 +82,11 @@ serve(async (req) => {
             page: page.toString(),
           });
 
-          console.log(`   🔗 API Call (page ${page}): Using shopify_id = ${product.shopify_id}`);
+          console.log(`   🔗 Page ${page}: Fetching reviews...`);
           const response = await fetch(`${reviewsUrl}?${params.toString()}`);
           
-          console.log(`   📡 Response Status: ${response.status}`);
-          
           if (!response.ok) {
-            console.error(`   ❌ API Error: ${response.status} ${response.statusText}`);
+            console.error(`   ❌ API Error: ${response.status}`);
             errors++;
             syncResults.push({
               product: product.title,
@@ -98,11 +99,11 @@ serve(async (req) => {
           const data = await response.json();
           const reviews = data.reviews || [];
           
-          console.log(`   ✅ Found ${reviews.length} reviews on page ${page}`);
+          console.log(`   ✅ Found ${reviews.length} reviews`);
           
           if (reviews.length === 0) {
             if (page === 1) {
-              console.log(`   ℹ️  No reviews for this product (this is OK)`);
+              console.log(`   ℹ️  No reviews`);
               syncResults.push({
                 product: product.title,
                 status: 'no_reviews',
@@ -120,41 +121,37 @@ serve(async (req) => {
           totalReviews += reviews.length;
           productReviewCount += reviews.length;
 
-          for (const review of reviews) {
-            try {
-              const reviewRecord = {
-                judgeme_id: review.id.toString(),
-                product_handle: product.handle,
-                shopify_product_id: product.shopify_id,
-                rating: review.rating,
-                title: review.title || null,
-                body: review.body || null,
-                reviewer_name: review.reviewer?.name || "Anonymous",
-                reviewer_email: review.reviewer?.email || null,
-                reviewer_location: review.reviewer?.location || null,
-                verified_buyer: review.verified === "yes" || review.verified === true,
-                pictures: review.pictures || [],
-                created_at_judgeme: review.created_at,
-                updated_at_judgeme: review.updated_at,
-              };
+          // Batch upsert for better performance
+          const reviewRecords = reviews.map((review: any) => ({
+            judgeme_id: review.id?.toString() || `temp-${Date.now()}-${Math.random()}`,
+            product_handle: product.handle,
+            shopify_product_id: product.shopify_id,
+            rating: review.rating || 0,
+            title: review.title || null,
+            body: review.body || null,
+            reviewer_name: review.reviewer?.name || review.reviewer?.display_name || "Anonymous",
+            reviewer_email: review.reviewer?.email || null,
+            reviewer_location: review.reviewer?.location || null,
+            verified_buyer: review.verified === "yes" || review.verified === true || review.verified_buyer === true,
+            pictures: review.pictures || [],
+            created_at_judgeme: review.created_at || new Date().toISOString(),
+            updated_at_judgeme: review.updated_at || new Date().toISOString(),
+            synced_at: new Date().toISOString()
+          }));
 
-              const { error: upsertError } = await supabase
-                .from("product_reviews")
-                .upsert(reviewRecord, {
-                  onConflict: "judgeme_id",
-                  ignoreDuplicates: false,
-                });
+          // Batch insert instead of one-by-one
+          const { error: batchError } = await supabase
+            .from("product_reviews")
+            .upsert(reviewRecords, {
+              onConflict: "judgeme_id",
+              ignoreDuplicates: false,
+            });
 
-              if (upsertError) {
-                console.error(`   ❌ Upsert error: ${upsertError.message}`);
-                errors++;
-              } else {
-                syncedReviews++;
-              }
-            } catch (err) {
-              console.error(`   ❌ Review processing error:`, err);
-              errors++;
-            }
+          if (batchError) {
+            console.error(`   ❌ Batch upsert error:`, batchError.message);
+            errors++;
+          } else {
+            syncedReviews += reviews.length;
           }
 
           // If we got less than 100 reviews, we've reached the end
@@ -163,6 +160,13 @@ serve(async (req) => {
           } else {
             page++;
           }
+          
+          // Removed timeout check as edge functions will auto-terminate
+          // Let it process as many as possible within the 60s limit
+        }
+        
+        if (page > MAX_PAGES_PER_PRODUCT) {
+          console.warn(`   ⚠️  Hit max pages limit (${MAX_PAGES_PER_PRODUCT}), ${productReviewCount} reviews synced`);
         }
         
         if (productReviewCount > 0) {
