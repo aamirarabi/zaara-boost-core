@@ -281,7 +281,8 @@ const Orders = () => {
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => {
-                  const items = JSON.parse(order.line_items || '[]');
+                  // line_items is already a JSONB object, no need to parse
+                  const items = Array.isArray(order.line_items) ? order.line_items : [];
                   const itemsText = items.map((item: any) => 
                     `${item.quantity}x ${item.name}`
                   ).join(', ');
@@ -367,7 +368,7 @@ const Orders = () => {
                         <span className="font-medium">Email:</span> {selectedOrder.customer_email || 'N/A'}
                       </div>
                       <div>
-                        <span className="font-medium">City:</span> {JSON.parse(selectedOrder.shipping_address || '{}').city || 'N/A'}
+                        <span className="font-medium">City:</span> {typeof selectedOrder.shipping_address === 'object' ? selectedOrder.shipping_address?.city : 'N/A'}
                       </div>
                     </div>
                   </CardContent>
@@ -379,7 +380,7 @@ const Orders = () => {
                     <CardTitle className="text-sm">Order Items</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {JSON.parse(selectedOrder.line_items || '[]').map((item: any, idx: number) => (
+                    {(Array.isArray(selectedOrder.line_items) ? selectedOrder.line_items : []).map((item: any, idx: number) => (
                       <div key={idx} className="flex justify-between py-2 border-b last:border-0">
                         <div>
                           <div className="font-medium">{item.name}</div>
