@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.test-zaara]
 verify_jwt = false
+
+[functions.update-openai-assistant]
+verify_jwt = false
+
+[functions.sync-judgeme-reviews]
+verify_jwt = false
