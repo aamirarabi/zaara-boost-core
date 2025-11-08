@@ -48,18 +48,21 @@ serve(async (req) => {
       );
     }
 
-    console.log(`📦 Processing ${products.length} products...`);
+    console.log(`\n🔄 Starting sync for ${products.length} products...\n`);
 
     let totalReviews = 0;
     let syncedReviews = 0;
     let errors = 0;
     let productsWithReviews = 0;
-    const reviewsPerProduct: Array<{ product: string; reviews: number }> = [];
+    const syncResults: Array<{ product: string; status: string; reviews: number }> = [];
 
-    // Sync reviews for each product
+    // Process EACH product individually, never stop early
     for (const product of products) {
       try {
-        console.log(`   📝 ${product.title}...`);
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`📦 [${products.indexOf(product) + 1}/${products.length}] Processing: ${product.title}`);
+        console.log(`   Shopify ID: ${product.shopify_id}`);
+        console.log(`   Handle: ${product.handle}`);
 
         let page = 1;
         let hasMoreReviews = true;
@@ -76,11 +79,19 @@ serve(async (req) => {
             page: page.toString(),
           });
 
+          console.log(`   🔗 API Call (page ${page}): Using shopify_id = ${product.shopify_id}`);
           const response = await fetch(`${reviewsUrl}?${params.toString()}`);
           
+          console.log(`   📡 Response Status: ${response.status}`);
+          
           if (!response.ok) {
-            console.error(`   ❌ API error for ${product.title}: ${response.status}`);
+            console.error(`   ❌ API Error: ${response.status} ${response.statusText}`);
             errors++;
+            syncResults.push({
+              product: product.title,
+              status: 'error',
+              reviews: 0
+            });
             break;
           }
 
@@ -90,11 +101,19 @@ serve(async (req) => {
           console.log(`   ✅ Found ${reviews.length} reviews on page ${page}`);
           
           if (reviews.length === 0) {
+            if (page === 1) {
+              console.log(`   ℹ️  No reviews for this product (this is OK)`);
+              syncResults.push({
+                product: product.title,
+                status: 'no_reviews',
+                reviews: 0
+              });
+            }
             hasMoreReviews = false;
             break;
           }
           
-          if (reviews.length > 0 && page === 1) {
+          if (page === 1) {
             productsWithReviews++;
           }
           
@@ -147,12 +166,22 @@ serve(async (req) => {
         }
         
         if (productReviewCount > 0) {
-          console.log(`   💾 Synced ${productReviewCount} total reviews for ${product.title}`);
-          reviewsPerProduct.push({ product: product.title, reviews: productReviewCount });
+          console.log(`   ✅ SUCCESS: Synced ${productReviewCount} reviews`);
+          syncResults.push({
+            product: product.title,
+            status: 'success',
+            reviews: productReviewCount
+          });
         }
       } catch (err) {
-        console.error(`   ❌ Product sync error for ${product.title}:`, err);
+        console.error(`   ❌ PRODUCT ERROR:`, err);
         errors++;
+        syncResults.push({
+          product: product.title,
+          status: 'error',
+          reviews: 0
+        });
+        // Continue to next product, don't stop entire sync
       }
     }
 
@@ -162,19 +191,42 @@ serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", settings.id);
 
+    // Print comprehensive summary
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`\n📊 SYNC COMPLETE SUMMARY:\n`);
+    console.log(`   Total Products Processed: ${products.length}`);
+    console.log(`   Products with Reviews: ${productsWithReviews}`);
+    console.log(`   Total Reviews Found: ${totalReviews}`);
+    console.log(`   Reviews Synced: ${syncedReviews}`);
+    console.log(`   Errors: ${errors}`);
+
+    // Show per-product breakdown
+    console.log(`\n📋 PER-PRODUCT BREAKDOWN:\n`);
+    for (const result of syncResults) {
+      if (result.reviews > 0) {
+        console.log(`   ✅ ${result.product}: ${result.reviews} reviews`);
+      } else if (result.status === 'error') {
+        console.log(`   ❌ ${result.product}: ERROR`);
+      } else {
+        console.log(`   ○  ${result.product}: No reviews`);
+      }
+    }
+
     const summary = {
       success: true,
-      totalProducts: products.length,
-      productsWithReviews,
-      totalReviews,
-      syncedReviews,
-      reviewsPerProduct: reviewsPerProduct.slice(0, 10), // Top 10
-      errors,
+      message: `Synced ${syncedReviews} reviews from ${productsWithReviews} products`,
+      summary: {
+        totalProducts: products.length,
+        productsWithReviews: productsWithReviews,
+        totalReviewsFound: totalReviews,
+        reviewsSynced: syncedReviews,
+        errors: errors
+      },
+      results: syncResults,
       timestamp: new Date().toISOString(),
     };
 
-    console.log(`✨ SUMMARY: ${totalReviews} reviews across ${productsWithReviews} products`);
-    console.log("✅ Sync complete:", summary);
+    console.log("✅ Sync complete");
 
     return new Response(
       JSON.stringify(summary),

@@ -311,6 +311,23 @@ const KEYWORD_MAPPING: Record<string, string> = {
   "wireless headsets": "headset",
   "anc headset": "headset",
   
+  // Product name keywords
+  "beat": "headphone,headset,earphone,audio",
+  "beats": "headphone,headset,earphone,audio",
+  "reverb": "headphone,headset,earphone,audio",
+  "pulse": "headphone,headset,earphone,audio,speaker",
+  "wave": "headphone,headset,earphone,audio,speaker",
+  "astro": "watch,smartwatch",
+  "cosmic": "watch,smartwatch",
+  "surge": "chair,gaming chair",
+  "comfort": "chair,gaming chair",
+  "impulse": "chair,gaming chair",
+  "synergy": "chair,gaming chair",
+  "nova": "chair,gaming chair",
+  "apex": "chair,gaming chair",
+  "throne": "chair,gaming chair",
+  "supreme": "chair,gaming chair",
+  
   // Audio - Earbuds
   "earbuds": "Earbuds",
   "earbud": "Earbuds",
@@ -477,33 +494,35 @@ async function getLeopardsTracking(supabase: any, trackingNumber: string): Promi
   status: string;
 } | null> {
   try {
-    console.log("🐆 Fetching Leopards tracking for:", trackingNumber);
+    console.log("🐆 [LEOPARDS] Tracking:", trackingNumber);
     
     // Get API credentials from courier_settings
-    const { data: settings } = await supabase
+    const { data: settings, error } = await supabase
       .from("courier_settings")
       .select("api_key, api_password, api_endpoint")
       .eq("courier_name", "Leopards")
       .single();
     
-    if (!settings?.api_key || !settings?.api_password) {
-      console.error("❌ Leopards API credentials not configured");
+    if (error || !settings) {
+      console.error("❌ [LEOPARDS] Settings error:", error);
       return null;
     }
     
-    console.log("✅ Leopards credentials loaded");
+    if (!settings.api_key || !settings.api_password) {
+      console.error("❌ [LEOPARDS] Missing credentials");
+      return null;
+    }
     
     // Leopards API uses POST with form-urlencoded parameters
-    const url = settings.api_endpoint;
     const formData = new URLSearchParams({
       'api_key': settings.api_key,
       'api_password': settings.api_password,
       'track_numbers': trackingNumber
     });
     
-    console.log("📡 Calling Leopards API...");
+    console.log("📡 [LEOPARDS] Calling API...");
     
-    const response = await fetch(url, {
+    const response = await fetch(settings.api_endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded"
@@ -511,31 +530,31 @@ async function getLeopardsTracking(supabase: any, trackingNumber: string): Promi
       body: formData.toString()
     });
     
+    console.log("📥 [LEOPARDS] Status:", response.status);
+    
     if (!response.ok) {
-      console.error("❌ Leopards API HTTP error:", response.status);
+      const errorText = await response.text();
+      console.error("❌ [LEOPARDS] API error:", errorText);
       return null;
     }
     
     const data = await response.json();
-    console.log("📦 Leopards API response:", JSON.stringify(data, null, 2));
+    console.log("📦 [LEOPARDS] Response:", JSON.stringify(data));
     
     // Check API response status
     if (data.status !== 1 || data.error !== 0) {
-      console.error("❌ Leopards API returned error:", data);
+      console.error("❌ [LEOPARDS] Error in response:", data);
       return null;
     }
     
     // Get packet data
     const packets = data.packet_list || [];
     if (packets.length === 0) {
-      console.error("❌ No packet data in response");
+      console.error("❌ [LEOPARDS] No packets");
       return null;
     }
     
     const packet = packets[0];
-    console.log("📦 Packet status:", packet.booked_packet_status);
-    
-    // Get latest tracking detail
     const trackingDetails = packet['Tracking Detail'] || [];
     const latestDetail = trackingDetails[trackingDetails.length - 1];
     
@@ -544,11 +563,11 @@ async function getLeopardsTracking(supabase: any, trackingNumber: string): Promi
       status: packet.booked_packet_status || "In Transit"
     };
     
-    console.log("✅ Leopards tracking result:", result);
+    console.log("✅ [LEOPARDS] Success:", result);
     return result;
     
   } catch (error) {
-    console.error("❌ Leopards tracking error:", error);
+    console.error("❌ [LEOPARDS] Exception:", error);
     return null;
   }
 }
@@ -1123,6 +1142,7 @@ User query: ${message}`
       },
       body: JSON.stringify({
         assistant_id: ASSISTANT_ID,
+        // ✅ NO instructions parameter - uses OpenAI Dashboard instructions!
         tools: TOOLS,
         tool_choice: "auto"
       })
@@ -1351,7 +1371,34 @@ User query: ${message}`
               .single();
             
             if (product) {
-              // Extract video URL from metafields if available
+              console.log("📦 Fetching product details for:", product.title);
+              
+              // Fetch reviews for this product
+              const { data: reviews, error: reviewsError } = await supabase
+                .from("product_reviews")
+                .select("rating, title, body, reviewer_name, reviewer_location, verified_buyer, pictures, created_at_judgeme")
+                .eq("shopify_product_id", product.shopify_id)
+                .order("rating", { ascending: false })
+                .order("created_at_judgeme", { ascending: false })
+                .limit(5);
+              
+              if (reviewsError) {
+                console.error("❌ Reviews query error:", reviewsError);
+              } else {
+                console.log(`✅ Found ${reviews?.length || 0} reviews`);
+              }
+              
+              // Calculate average rating from actual reviews
+              let average_rating = null;
+              let review_count = 0;
+              
+              if (reviews && reviews.length > 0) {
+                const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+                average_rating = (totalRating / reviews.length).toFixed(1);
+                review_count = reviews.length;
+              }
+              
+              // Extract video URL from metafields
               const metafields = product.metafields || {};
               let videoUrl = null;
               
@@ -1380,10 +1427,13 @@ User query: ${message}`
                 image_url: firstImage,
                 colors: colors,
                 video_url: videoUrl,
-                review_rating: product.review_rating || null,
-                review_count: product.review_count || 0,
+                average_rating: average_rating,
+                review_count: review_count,
+                reviews: reviews || [],
                 inventory: product.inventory
               });
+              
+              console.log("✅ Product details prepared with reviews");
             } else {
               output = JSON.stringify({
                 found: false,
@@ -1638,6 +1688,81 @@ User query: ${message}`
             finalMessage = finalMessage.replace(/\[Name\]\s*/g, "");
           }
 
+          // ==========================================
+          // CHECK FOR IMAGE URL IN TOOL OUTPUTS
+          // ==========================================
+          let imageUrl: string | null = null;
+          
+          // Get the run data to check for tool calls
+          const runDataResponse = await fetch(
+            `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
+            {
+              headers: {
+                "Authorization": `Bearer ${openaiApiKey}`,
+                "OpenAI-Beta": "assistants=v2"
+              }
+            }
+          );
+          
+          if (runDataResponse.ok) {
+            const runData = await runDataResponse.json();
+            
+            // Check if there were tool calls with outputs
+            const toolCalls = runData.required_action?.submit_tool_outputs?.tool_calls || [];
+            
+            for (const toolCall of toolCalls) {
+              if (toolCall.function.name === "get_product_details") {
+                try {
+                  // Parse the output that was submitted
+                  const args = JSON.parse(toolCall.function.arguments);
+                  
+                  // Re-fetch product to get image
+                  const { data: product } = await supabase
+                    .from("shopify_products")
+                    .select("images")
+                    .eq("product_id", args.product_id)
+                    .single();
+                  
+                  if (product) {
+                    const images = JSON.parse(product.images || "[]");
+                    if (images.length > 0) {
+                      imageUrl = images[0];
+                      console.log("📸 Found image URL:", imageUrl);
+                      break;
+                    }
+                  }
+                } catch (e) {
+                  console.error("Error parsing tool output:", e);
+                }
+              }
+            }
+          }
+
+          // ==========================================
+          // SEND IMAGE WITH CAPTION OR TEXT ONLY
+          // ==========================================
+          if (imageUrl) {
+            console.log("📸 Sending product image with caption");
+            
+            try {
+              // Send image with caption
+              await sendWhatsAppImage(supabase, phone_number, imageUrl, finalMessage);
+              
+              console.log("✅ WhatsApp image sent successfully");
+
+              return new Response(
+                JSON.stringify({ success: true, response: finalMessage, image_sent: true }), 
+                {
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                }
+              );
+            } catch (imageError) {
+              console.error("❌ Failed to send image, falling back to text:", imageError);
+              // Fall through to send text only
+            }
+          }
+
+          // Send text only (no image or image failed)
           const { data: sendData, error: sendError } = await supabase.functions.invoke(
             "send-whatsapp-message", 
             {
