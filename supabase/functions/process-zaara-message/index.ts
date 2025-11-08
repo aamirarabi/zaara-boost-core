@@ -7,6 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Format date as "DD MMM YYYY" for better display
+function formatDate(dateString: string | null): string {
+  if (!dateString) return "Not available";
+  const date = new Date(dateString);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 const TOOLS = [
   {
     type: "function",
@@ -846,34 +854,9 @@ serve(async (req) => {
           messages: [
             {
               role: "user",
-              content: `${contextCustomerName ? `CUSTOMER INFO: Name is "${contextCustomerName}".` : 'NEW CUSTOMER: Name not yet collected.'}
+              content: `${contextCustomerName ? `CUSTOMER INFO: Customer name is "${contextCustomerName}". Always address them as "${contextCustomerName} Sir/Madam" in responses.` : 'NEW CUSTOMER: Customer name not yet known. Ask for their name and use save_customer_name tool.'}
 
 Customer Phone: ${phone_number}
-
-IMPORTANT FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
-
-When showing product lists, use this EXACT format:
-"Here are all the available Boost [category], ${contextCustomerName ? contextCustomerName + ' Sir/Madam' : 'Sir/Madam'}! [emoji]
-
-1. [Product Name]
-   💰 Price: PKR [price_min] - [price_max]
-   🎨 Colors: [color1, color2]
-   ✅ Availability: In stock
-
-2. [Product Name]
-   💰 Price: PKR [price]
-   🎨 Colors: [colors]
-   ✅ Availability: In stock
-
-[Continue for ALL products...]
-
-${contextCustomerName ? contextCustomerName + ' Sir/Madam' : 'Sir/Madam'}, please choose the number for details."
-
-Use emojis: 🪑 chairs, 🎧 headphones, 🎵 earbuds, 🔊 speakers, ⌚ watches, 🔋 power banks, 🎮 gaming, 🖥️ monitors, 🖱️ mouse
-
-Bold important info: *70 hours*, *1-year warranty*, *Rs. 34,999*
-
-${!contextCustomerName ? '\nIMPORTANT: After greeting, ask for customer name politely and use save_customer_name tool to save it.' : ''}
 
 User query: ${message}`
             }
@@ -1236,6 +1219,37 @@ User query: ${message}`
                 console.log(`✅ No reviews found for this product`);
               }
               
+              // Fetch FAQ videos related to this product
+              const productTitle = product.title.toLowerCase();
+              const productTags = (product.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
+
+              console.log(`🔍 Searching for FAQ videos related to: ${product.title}`);
+
+              const { data: productFaqs, error: faqVideoError } = await supabase
+                .from("faq_vectors")
+                .select("question, answer, video_urls, category")
+                .eq("is_active", true)
+                .or(`question.ilike.%${productTitle}%,answer.ilike.%${productTitle}%,category.ilike.%${product.product_type}%`)
+                .not("video_urls", "is", null);
+
+              let faqVideos: string[] = [];
+              if (productFaqs && productFaqs.length > 0) {
+                console.log(`✅ Found ${productFaqs.length} FAQs with videos for this product`);
+                
+                // Extract all video URLs from FAQs
+                productFaqs.forEach((faq: any) => {
+                  if (faq.video_urls && Array.isArray(faq.video_urls)) {
+                    faqVideos = faqVideos.concat(faq.video_urls);
+                  }
+                });
+                
+                // Remove duplicates
+                faqVideos = [...new Set(faqVideos)];
+                console.log(`📹 Total unique FAQ videos found: ${faqVideos.length}`);
+              } else {
+                console.log(`ℹ️ No FAQ videos found for this product`);
+              }
+              
               // Extract video URL from metafields
               const metafields = product.metafields || {};
               let videoUrl = null;
@@ -1266,11 +1280,16 @@ User query: ${message}`
                 product_handle: product.handle,
                 product_url: `https://www.boost-lifestyle.co/products/${product.handle}`,
                 colors: colors,
+                product_type: product.product_type || "",
+                vendor: product.vendor || "",
                 video_url: videoUrl,
+                faq_videos: faqVideos,
+                all_videos: videoUrl ? [videoUrl, ...faqVideos] : faqVideos,
                 average_rating: average_rating,
                 review_count: review_count,
                 reviews: reviews || [],
-                inventory: product.inventory
+                inventory: product.inventory,
+                tags: product.tags || ""
               });
               
               console.log("✅ Product details prepared with reviews");
@@ -1355,12 +1374,21 @@ User query: ${message}`
               if (order.tracking_number && order.courier_name) {
                 const courierLower = order.courier_name.toLowerCase();
                 
-                if (courierLower.includes("leopard")) {
-                  console.log(`🚚 Fetching Leopards tracking for: ${order.tracking_number}`);
+                console.log(`📦 Detected courier: "${order.courier_name}" (normalized: "${courierLower}")`);
+                
+                if (courierLower.includes("leopards")) {
+                  console.log(`🐆 Fetching Leopards tracking for: ${order.tracking_number}`);
                   courierTracking = await getLeopardsTracking(supabase, order.tracking_number);
                 } else if (courierLower.includes("postex") || courierLower.includes("other")) {
-                  console.log(`🚚 Fetching PostEx tracking for: ${order.tracking_number}`);
+                  // Note: Shopify stores PostEx as "Other" sometimes
+                  console.log(`📮 Fetching PostEx tracking for: ${order.tracking_number}`);
                   courierTracking = await getPostExTracking(supabase, order.tracking_number);
+                } else if (courierLower.includes("tcs")) {
+                  console.log(`📦 TCS courier detected - no real-time tracking available yet`);
+                  // Don't fetch any tracking - just show scheduled ETA
+                } else {
+                  console.log(`ℹ️ Unknown courier type: "${order.courier_name}", no real-time tracking available`);
+                  // Don't fetch any tracking - just show scheduled ETA
                 }
                 
                 if (courierTracking) {
@@ -1390,6 +1418,9 @@ User query: ${message}`
                 found: true,
                 order_number: order.order_number,
                 order_date: order.created_at,
+                order_date_formatted: formatDate(order.created_at),
+                dispatch_date: order.fulfillment_date || null,
+                dispatch_date_formatted: formatDate(order.fulfillment_date),
                 customer_name: order.customer_name || "Customer",
                 customer_email: order.customer_email || null,
                 customer_phone: order.customer_phone || null,
@@ -1423,14 +1454,24 @@ User query: ${message}`
             const searchTerm = args.search_term.toLowerCase();
             console.log(`🔍 Searching FAQs for: "${searchTerm}"`);
             
-            const { data: faqs } = await supabase
-              .rpc('search_faqs', { 
-                search_term: searchTerm,
-                result_limit: 3 
-              });
+            // Search FAQs in database with ILIKE for flexible matching
+            // Search across question, answer, category, and keywords columns
+            const { data: faqs, error: faqError } = await supabase
+              .from("faq_vectors")
+              .select("question, answer, category, video_urls, image_urls")
+              .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,keywords.cs.{${searchTerm}}`)
+              .eq("is_active", true)
+              .limit(3);
             
-            if (faqs && faqs.length > 0) {
-              // Bold important information in FAQ answers
+            if (faqError) {
+              console.error(`❌ FAQ search error:`, faqError);
+              output = JSON.stringify({
+                found: false,
+                message: `Error searching FAQs: ${faqError.message}`
+              });
+            } else if (faqs && faqs.length > 0) {
+              console.log(`✅ Found ${faqs.length} FAQs matching "${searchTerm}"`);
+              
               const enrichedFaqs = faqs.map((faq: any) => ({
                 question: faq.question,
                 answer: boldImportantInfo(faq.answer),
@@ -1445,9 +1486,10 @@ User query: ${message}`
                 faqs: enrichedFaqs
               });
             } else {
+              console.log(`ℹ️ No FAQs found for "${searchTerm}"`);
               output = JSON.stringify({
                 found: false,
-                message: `No FAQ found for "${searchTerm}"`
+                message: `No FAQ found for "${searchTerm}". Customer can contact support at https://wa.me/923038981133`
               });
             }
           }
