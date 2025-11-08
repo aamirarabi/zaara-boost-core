@@ -648,6 +648,76 @@ serve(async (req) => {
           .single();
         
         if (product) {
+          // Get full product details using the same logic as get_product_details tool
+          console.log("📦 Fetching complete product details for:", product.title);
+          
+          // Fetch TOP 5 reviews for display
+          const { data: reviews } = await supabase
+            .from("product_reviews")
+            .select("rating, title, body, reviewer_name, reviewer_location, verified_buyer, pictures, created_at_judgeme")
+            .eq("shopify_product_id", product.shopify_id)
+            .order("rating", { ascending: false })
+            .order("created_at_judgeme", { ascending: false })
+            .limit(5);
+
+          // Get TOTAL count of ALL reviews
+          const { count: totalReviewCount } = await supabase
+            .from("product_reviews")
+            .select("*", { count: "exact", head: true })
+            .eq("shopify_product_id", product.shopify_id);
+
+          // Get ALL ratings to calculate accurate average
+          const { data: allReviewsForAvg } = await supabase
+            .from("product_reviews")
+            .select("rating")
+            .eq("shopify_product_id", product.shopify_id);
+
+          let average_rating = null;
+          let review_count = totalReviewCount || 0;
+
+          if (allReviewsForAvg && allReviewsForAvg.length > 0) {
+            const totalRating = allReviewsForAvg.reduce((sum, r) => sum + r.rating, 0);
+            average_rating = (totalRating / allReviewsForAvg.length).toFixed(1);
+          }
+          
+          // Fetch FAQ videos related to this product
+          const productTitle = product.title.toLowerCase();
+          let productTags: string[] = [];
+          if (typeof product.tags === 'string') {
+            productTags = product.tags.toLowerCase().split(',').map((t: string) => t.trim());
+          } else if (Array.isArray(product.tags)) {
+            productTags = product.tags.map((t: string) => t.toLowerCase().trim());
+          }
+
+          const { data: productFaqs } = await supabase
+            .from("faq_vectors")
+            .select("question, answer, video_urls, category")
+            .eq("is_active", true)
+            .or(`question.ilike.%${productTitle}%,answer.ilike.%${productTitle}%,category.ilike.%${product.product_type}%`)
+            .not("video_urls", "is", null);
+
+          let faqVideos: string[] = [];
+          if (productFaqs && productFaqs.length > 0) {
+            productFaqs.forEach((faq: any) => {
+              if (faq.video_urls && Array.isArray(faq.video_urls)) {
+                faqVideos = faqVideos.concat(faq.video_urls);
+              }
+            });
+            faqVideos = [...new Set(faqVideos)];
+          }
+          
+          // Extract video URL from metafields
+          const metafields = product.metafields || {};
+          let videoUrl = null;
+          if (metafields.product_video) {
+            videoUrl = metafields.product_video;
+          } else if (Array.isArray(metafields) && metafields.length > 0) {
+            const videoMeta = metafields.find((m: any) => 
+              m.namespace === 'custom' && m.key === 'product_video'
+            );
+            if (videoMeta) videoUrl = videoMeta.value;
+          }
+          
           // Parse variants for price range and colors
           const variants = JSON.parse(product.variants || "[]");
           
@@ -671,34 +741,66 @@ serve(async (req) => {
           // Get colors
           const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
           
-          // Clean description
+          // Clean description for key features
           const cleanDescription = cleanHtmlForWhatsApp(product.description || "");
-          const features = cleanDescription.split("\n").filter((line: string) => line.trim().startsWith("•")).slice(0, 5);
-          
-          // Extract video URL from metafields
-          const metafields = product.metafields || {};
-          let videoUrl = null;
-          if (metafields.product_video) {
-            videoUrl = metafields.product_video;
-          } else if (Array.isArray(metafields) && metafields.length > 0) {
-            const videoMeta = metafields.find((m: any) => 
-              m.namespace === 'custom' && m.key === 'product_video'
-            );
-            if (videoMeta) videoUrl = videoMeta.value;
-          }
+          const features = cleanDescription.split("\n").filter((line: string) => line.trim().startsWith("•"));
           
           // Check if out of stock
           const isOutOfStock = (product.inventory || 0) === 0;
           
-          // Build structured response with single caption
-          let detailsText = `*${product.title}*\n\n`;
+          // Build complete structured response with all details
+          let detailsText = `*${product.title}*\n`;
           detailsText += `💰 Price: ${priceText}\n`;
           if (colors.length > 0) {
             detailsText += `🎨 Available Colors: ${colors.join(", ")}\n`;
           }
+          detailsText += `${isOutOfStock ? '❌' : '✅'} Stock: ${isOutOfStock ? 'Out of Stock' : 'In stock'}\n\n`;
           
-          if (isOutOfStock) {
-            detailsText += `❌ Availability: Out of Stock\n\n`;
+          if (!isOutOfStock) {
+            // Add review rating if available
+            if (average_rating && review_count > 0) {
+              const stars = '⭐'.repeat(Math.round(parseFloat(average_rating)));
+              detailsText += `⭐ Customer Rating: *${average_rating}*/5 ${stars} (${review_count} reviews)\n\n`;
+            }
+            
+            // Add key features
+            if (features.length > 0) {
+              detailsText += `*✨ Key Features:*\n`;
+              features.forEach((feature: string) => {
+                detailsText += `${feature}\n`;
+              });
+              detailsText += `\n`;
+            }
+            
+            // Add customer reviews
+            if (reviews && reviews.length > 0) {
+              detailsText += `*💬 Customer Reviews:*\n\n`;
+              reviews.slice(0, 3).forEach((review: any) => {
+                const reviewStars = '★'.repeat(review.rating);
+                detailsText += `• ${reviewStars}\n`;
+                if (review.title) detailsText += `  "${review.title}"\n`;
+                if (review.body) detailsText += `  ${review.body.slice(0, 150)}${review.body.length > 150 ? '...' : ''}\n`;
+                detailsText += `  — ${review.reviewer_name || 'Anonymous'}\n\n`;
+              });
+            }
+            
+            // Add videos if available
+            if (videoUrl) {
+              detailsText += `📹 Product Video: ${videoUrl}\n\n`;
+            }
+            if (faqVideos.length > 0) {
+              detailsText += `📹 FAQ Videos:\n`;
+              faqVideos.slice(0, 2).forEach((video: string) => {
+                detailsText += `• ${video}\n`;
+              });
+              detailsText += `\n`;
+            }
+            
+            // Add order link
+            detailsText += `🔗 *Order Now*: [${product.title}](https://www.boost-lifestyle.co/products/${product.handle})\n\n`;
+            detailsText += `${customerName ? customerName + ' Sir/Madam, would' : 'Would'} you like to order this? Reply "Yes" and I'll connect you with our sales team! 😊`;
+          } else {
+            // Out of stock message
             detailsText += `${customerName ? customerName + ' Sir/Madam, would' : 'Would'} you like notification when back in stock? 🔔\n\n`;
             detailsText += `Reply "Yes" to join waitlist! 😊`;
             
@@ -714,37 +816,18 @@ serve(async (req) => {
                   waitlist_product_title: product.title
                 }
               }, { onConflict: "phone_number" });
-          } else {
-            detailsText += `✅ Availability: In stock\n\n`;
-            
-            if (features.length > 0) {
-              detailsText += `✨ Key Features:\n${features.join("\n")}\n\n`;
-            }
-            
-            // Add review rating if available
-            if (product.review_rating && product.review_count > 0) {
-              const stars = '⭐'.repeat(Math.round(product.review_rating));
-              detailsText += `${stars} ${product.review_rating.toFixed(1)}/5 (${product.review_count} reviews)\n`;
-              detailsText += `💚 Customers love this product!\n\n`;
-            }
-            
-            if (videoUrl) {
-              detailsText += `📹 Video: ${videoUrl}\n\n`;
-            }
-            
-            detailsText += `Would you like to order this? 😊`;
           }
           
-          // IMPROVEMENT #1: Single message format - send image WITH caption
+          // Send image first, then details
           const images = JSON.parse(product.images || "[]");
           if (images.length > 0) {
-            await sendWhatsAppImage(supabase, phone_number, images[0], detailsText);
-          } else {
-            // No image, send text only
-            await supabase.functions.invoke("send-whatsapp-message", {
-              body: { phone_number, message: detailsText },
-            });
+            await sendWhatsAppImage(supabase, phone_number, images[0], product.title);
           }
+          
+          // Send complete details
+          await supabase.functions.invoke("send-whatsapp-message", {
+            body: { phone_number, message: detailsText },
+          });
           
           return new Response(JSON.stringify({ success: true, response: detailsText }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
