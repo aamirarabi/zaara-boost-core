@@ -61,73 +61,94 @@ serve(async (req) => {
       try {
         console.log(`   📝 ${product.title}...`);
 
-        const reviewsUrl = `https://judge.me/api/v1/reviews`;
-        const params = new URLSearchParams({
-          api_token: settings.private_token,
-          shop_domain: settings.shop_domain,
-          external_product_id: product.shopify_id,
-          per_page: "100",
-        });
+        let page = 1;
+        let hasMoreReviews = true;
+        let productReviewCount = 0;
 
-        const response = await fetch(`${reviewsUrl}?${params.toString()}`);
-        
-        if (!response.ok) {
-          console.error(`   ❌ API error for ${product.title}: ${response.status}`);
-          errors++;
-          continue;
-        }
+        // Paginate through all reviews for this product
+        while (hasMoreReviews) {
+          const reviewsUrl = `https://judge.me/api/v1/reviews`;
+          const params = new URLSearchParams({
+            api_token: settings.private_token,
+            shop_domain: settings.shop_domain,
+            external_product_id: product.shopify_id,
+            per_page: "100",
+            page: page.toString(),
+          });
 
-        const data = await response.json();
-        const reviews = data.reviews || [];
-        
-        console.log(`   ✅ Found ${reviews.length} reviews`);
-        
-        if (reviews.length > 0) {
-          productsWithReviews++;
-          reviewsPerProduct.push({ product: product.title, reviews: reviews.length });
-        }
-        
-        totalReviews += reviews.length;
-
-        for (const review of reviews) {
-          try {
-            const reviewRecord = {
-              judgeme_id: review.id.toString(),
-              product_handle: product.handle,
-              shopify_product_id: product.shopify_id,
-              rating: review.rating,
-              title: review.title || null,
-              body: review.body || null,
-              reviewer_name: review.reviewer?.name || "Anonymous",
-              reviewer_email: review.reviewer?.email || null,
-              reviewer_location: review.reviewer?.location || null,
-              verified_buyer: review.verified === "yes" || review.verified === true,
-              pictures: review.pictures || [],
-              created_at_judgeme: review.created_at,
-              updated_at_judgeme: review.updated_at,
-            };
-
-            const { error: upsertError } = await supabase
-              .from("product_reviews")
-              .upsert(reviewRecord, {
-                onConflict: "judgeme_id",
-                ignoreDuplicates: false,
-              });
-
-            if (upsertError) {
-              console.error(`   ❌ Upsert error: ${upsertError.message}`);
-              errors++;
-            } else {
-              syncedReviews++;
-            }
-          } catch (err) {
-            console.error(`   ❌ Review processing error:`, err);
+          const response = await fetch(`${reviewsUrl}?${params.toString()}`);
+          
+          if (!response.ok) {
+            console.error(`   ❌ API error for ${product.title}: ${response.status}`);
             errors++;
+            break;
+          }
+
+          const data = await response.json();
+          const reviews = data.reviews || [];
+          
+          console.log(`   ✅ Found ${reviews.length} reviews on page ${page}`);
+          
+          if (reviews.length === 0) {
+            hasMoreReviews = false;
+            break;
+          }
+          
+          if (reviews.length > 0 && page === 1) {
+            productsWithReviews++;
+          }
+          
+          totalReviews += reviews.length;
+          productReviewCount += reviews.length;
+
+          for (const review of reviews) {
+            try {
+              const reviewRecord = {
+                judgeme_id: review.id.toString(),
+                product_handle: product.handle,
+                shopify_product_id: product.shopify_id,
+                rating: review.rating,
+                title: review.title || null,
+                body: review.body || null,
+                reviewer_name: review.reviewer?.name || "Anonymous",
+                reviewer_email: review.reviewer?.email || null,
+                reviewer_location: review.reviewer?.location || null,
+                verified_buyer: review.verified === "yes" || review.verified === true,
+                pictures: review.pictures || [],
+                created_at_judgeme: review.created_at,
+                updated_at_judgeme: review.updated_at,
+              };
+
+              const { error: upsertError } = await supabase
+                .from("product_reviews")
+                .upsert(reviewRecord, {
+                  onConflict: "judgeme_id",
+                  ignoreDuplicates: false,
+                });
+
+              if (upsertError) {
+                console.error(`   ❌ Upsert error: ${upsertError.message}`);
+                errors++;
+              } else {
+                syncedReviews++;
+              }
+            } catch (err) {
+              console.error(`   ❌ Review processing error:`, err);
+              errors++;
+            }
+          }
+
+          // If we got less than 100 reviews, we've reached the end
+          if (reviews.length < 100) {
+            hasMoreReviews = false;
+          } else {
+            page++;
           }
         }
         
-        if (reviews.length > 0) {
-          console.log(`   💾 Synced ${reviews.length} reviews for ${product.title}`);
+        if (productReviewCount > 0) {
+          console.log(`   💾 Synced ${productReviewCount} total reviews for ${product.title}`);
+          reviewsPerProduct.push({ product: product.title, reviews: productReviewCount });
         }
       } catch (err) {
         console.error(`   ❌ Product sync error for ${product.title}:`, err);
