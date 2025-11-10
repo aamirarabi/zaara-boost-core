@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Package, MessageSquare, ShoppingCart, DollarSign, Truck } from "lucide-react";
+import { Users, Package, MessageSquare, ShoppingCart, DollarSign, Truck, RefreshCw } from "lucide-react";
 import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { OrdersChart } from "@/components/dashboard/OrdersChart";
@@ -20,6 +20,9 @@ import { InventoryAlerts } from "@/components/dashboard/InventoryAlerts";
 import { LiveClock } from "@/components/dashboard/LiveClock";
 import { RealTimeChatAnalytics } from "@/components/dashboard/RealTimeChatAnalytics";
 import { LatestReviewsWidget } from "@/components/dashboard/LatestReviewsWidget";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 // Dashboard component with complete analytics
@@ -41,6 +44,10 @@ const Dashboard = () => {
     end: getTodayEnd(),
     label: "Today"
   });
+
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [stats, setStats] = useState({
     customers: 0,
@@ -64,8 +71,10 @@ const Dashboard = () => {
 
 
   const loadStats = async () => {
+    setIsLoading(true);
     try {
-      console.log('📅 Loading stats for:', {
+      const startTime = performance.now();
+      console.log('🔄 Loading stats for:', {
         label: dateRange.label,
         start: dateRange.start.toISOString(),
         end: dateRange.end.toISOString()
@@ -257,13 +266,30 @@ const Dashboard = () => {
         firstAsked: new Date(gap.first_asked),
         lastAsked: new Date(gap.last_asked),
       })) || []
-    );
+      );
 
-    console.log('✅ All stats loaded successfully');
-  } catch (error) {
-    console.error('❌ Error loading stats:', error);
-  }
-};
+      const endTime = performance.now();
+      const loadTime = ((endTime - startTime) / 1000).toFixed(2);
+      
+      console.log(`✅ All stats loaded successfully in ${loadTime}s`);
+      setLastUpdated(new Date());
+      setIsLoading(false);
+      
+      toast({
+        title: "Dashboard Updated",
+        description: `Data refreshed for ${dateRange.label} (${loadTime}s)`,
+      });
+    } catch (error) {
+      console.error('❌ Error loading stats:', error);
+      setIsLoading(false);
+      
+      toast({
+        title: "Error Loading Data",
+        description: error instanceof Error ? error.message : "Failed to load dashboard data",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleFAQAdd = async (id: string) => {
     await supabase
@@ -372,16 +398,44 @@ const Dashboard = () => {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold">Dashboard</h1>
-              <p className="text-muted-foreground">Complete business analytics and insights</p>
+              <p className="text-muted-foreground">
+                Complete business analytics and insights
+                {lastUpdated && (
+                  <span className="ml-2 text-xs">
+                    • Last updated: {format(lastUpdated, 'HH:mm:ss')}
+                  </span>
+                )}
+              </p>
             </div>
             <div className="flex gap-4 items-start">
               <div className="flex gap-2">
+                <Button 
+                  onClick={() => loadStats()} 
+                  disabled={isLoading}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  {isLoading ? 'Loading...' : 'Refresh'}
+                </Button>
                 <SyncShopifyButton onSyncComplete={() => loadStats()} />
                 <SyncCourierButton onSyncComplete={() => loadStats()} />
               </div>
               <LiveClock />
             </div>
           </div>
+
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-32 w-full" />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* New Widgets Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -390,31 +444,21 @@ const Dashboard = () => {
           </div>
 
           {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {/* DEBUG INFO */}
-            {stats.orders === 0 && (
-              <div className="col-span-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                <p className="font-bold">Debug Info:</p>
-                <p>Orders: {stats.orders}</p>
-                <p>Revenue: {stats.revenue}</p>
-                <p>Date Range: {dateRange.label} ({dateRange.start.toISOString()} to {dateRange.end.toISOString()})</p>
-                <p>Check console for more details</p>
-              </div>
-            )}
-            
-            <MetricCard
-              title="Orders"
-              value={stats.orders}
-              change={23}
-              icon={ShoppingCart}
-              details={[
-                { label: "Received", value: Math.floor(stats.orders * 0.4) },
-                { label: "Fulfilled", value: Math.floor(stats.orders * 0.57) },
-                { label: "Pending", value: Math.floor(stats.orders * 0.03) },
-              ]}
-              footer={`Revenue: ₨${Math.floor(stats.revenue).toLocaleString()}`}
-              index={0}
-            />
+          {!isLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <MetricCard
+                title="Orders"
+                value={stats.orders}
+                change={23}
+                icon={ShoppingCart}
+                details={[
+                  { label: "Received", value: Math.floor(stats.orders * 0.4) },
+                  { label: "Fulfilled", value: Math.floor(stats.orders * 0.57) },
+                  { label: "Pending", value: Math.floor(stats.orders * 0.03) },
+                ]}
+                footer={`Revenue: ₨${Math.floor(stats.revenue).toLocaleString()}`}
+                index={0}
+              />
             <MetricCard
               title="WhatsApp"
               value={stats.messages}
@@ -476,15 +520,18 @@ const Dashboard = () => {
               index={5}
             />
           </div>
+          )}
 
           {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <OrdersChart data={orderTimeline} />
-            <OrderStatusChart data={orderStatusData} total={stats.orders} />
-          </div>
+          {!isLoading && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <OrdersChart data={orderTimeline} />
+              <OrderStatusChart data={orderStatusData} total={stats.orders} />
+            </div>
+          )}
 
           {/* Top Products Table */}
-          {topProducts.length > 0 && <TopProductsTable products={topProducts} />}
+          {!isLoading && topProducts.length > 0 && <TopProductsTable products={topProducts} />}
 
           {/* NEW: Product Complaints */}
           <ProductComplaints complaints={sampleComplaints} />
@@ -502,7 +549,7 @@ const Dashboard = () => {
           <PeakHours {...peakHoursData} />
 
           {/* Courier Performance */}
-          {courierStats.length > 0 && <CourierPerformance couriers={courierStats} />}
+          {!isLoading && courierStats.length > 0 && <CourierPerformance couriers={courierStats} />}
 
           {/* NEW: Warranty & Returns */}
           <WarrantyReturns 
@@ -526,7 +573,7 @@ const Dashboard = () => {
           />
 
           {/* FAQ Gap Analysis */}
-          {faqGaps.length > 0 && (
+          {!isLoading && faqGaps.length > 0 && (
             <FAQGapAnalysis 
               gaps={faqGaps} 
               onAdd={handleFAQAdd}
