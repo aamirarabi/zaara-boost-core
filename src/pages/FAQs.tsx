@@ -40,28 +40,56 @@ const FAQs = () => {
         return;
       }
 
-      const faqsToInsert = faqsData.map((f: any) => ({
-        id: f.id || crypto.randomUUID(),
-        question: f.question,
-        answer: f.answer,
-        category: f.category || "general",
-        keywords: f.keywords || [],
-        video_urls: f.video_urls || [],
-        image_urls: f.image_urls || [],
-        related_products: f.related_products || [],
-        created_at: new Date().toISOString(),
-      }));
+      // Get current user for audit
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || "system@boost-lifestyle.co";
 
-      const { error } = await supabase.from("faq_vectors").insert(faqsToInsert);
+      const faqsToInsert = faqsData.map((f: any) => {
+        // Fix URLs in answer (add // if missing)
+        let fixedAnswer = f.answer || "";
+        fixedAnswer = fixedAnswer
+          .replace(/https:([^\/])/g, 'https://$1')
+          .replace(/http:([^\/])/g, 'http://$1');
+        
+        // Extract video URLs from answer for separate storage
+        const videoUrlPattern = /(https?:\/\/[^\s]+)/g;
+        const foundUrls = fixedAnswer.match(videoUrlPattern) || [];
+        const videoUrls = foundUrls.filter(url => 
+          url.includes('youtube.com') || 
+          url.includes('youtu.be') || 
+          url.includes('instagram.com')
+        );
+
+        return {
+          id: f.id || crypto.randomUUID(),
+          question: f.question.trim(),
+          answer: fixedAnswer.trim(),
+          category: f.category || "general",
+          video_urls: videoUrls.length > 0 ? videoUrls : (f.video_urls || []),
+          image_urls: f.image_urls || [],
+          is_active: true,
+          created_by: f.author || userEmail,
+          updated_by: userEmail,
+          created_at: f.updated_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      });
+
+      const { error } = await supabase.from("faq_vectors").upsert(faqsToInsert, {
+        onConflict: 'id',
+        ignoreDuplicates: false
+      });
 
       if (error) {
         toast.error("Failed to import FAQs");
+        console.error("Import error:", error);
       } else {
-        toast.success(`✅ Imported ${faqsToInsert.length} FAQs!`);
+        toast.success(`✅ Imported ${faqsToInsert.length} FAQs with fixed URLs!`);
         loadFAQs();
       }
     } catch (error) {
       toast.error("Error reading file. Make sure it's valid JSON.");
+      console.error("File error:", error);
     }
     setUploading(false);
     e.target.value = "";

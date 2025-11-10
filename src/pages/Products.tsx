@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle, Video, Star, X } from "lucide-react";
 import { formatPKRCurrency } from "@/lib/utils";
 
 const Products = () => {
@@ -27,7 +27,40 @@ const Products = () => {
 
   const loadProducts = async () => {
     const { data } = await supabase.from("shopify_products").select("*").order("title");
-    if (data) setProducts(data);
+    
+    if (data) {
+      // Fetch review stats for each product
+      const productsWithStats = await Promise.all(
+        data.map(async (product) => {
+          // Get review count
+          const { count: reviewCount } = await supabase
+            .from('product_reviews')
+            .select('*', { count: 'exact', head: true })
+            .eq('shopify_product_id', product.shopify_id);
+          
+          // Get all ratings for average
+          const { data: ratings } = await supabase
+            .from('product_reviews')
+            .select('rating')
+            .eq('shopify_product_id', product.shopify_id);
+          
+          // Calculate average
+          let avgRating = null;
+          if (ratings && ratings.length > 0) {
+            const total = ratings.reduce((sum, r) => sum + r.rating, 0);
+            avgRating = (total / ratings.length).toFixed(1);
+          }
+          
+          return {
+            ...product,
+            review_count: reviewCount || 0,
+            average_rating: avgRating
+          };
+        })
+      );
+      
+      setProducts(productsWithStats);
+    }
   };
 
   const loadStats = async () => {
@@ -172,6 +205,11 @@ const Products = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProducts.map((product) => {
             const images = JSON.parse(product.images || "[]");
+            const metafields = product.metafields || {};
+            const hasVideo = metafields.product_video ? true : false;
+            const reviewCount = product.review_count || 0;
+            const avgRating = product.average_rating || null;
+            
             return (
               <Card key={product.product_id}>
                 <CardContent className="p-4">
@@ -189,6 +227,43 @@ const Products = () => {
                       {product.inventory > 0 ? `Stock: ${product.inventory}` : "Out of Stock"}
                     </Badge>
                   </div>
+                  
+                  {/* Video and Reviews Info */}
+                  <div className="flex justify-between items-center mb-2 text-sm">
+                    {/* Video */}
+                    <div className="flex items-center gap-1">
+                      {hasVideo ? (
+                        <>
+                          <Video className="h-4 w-4 text-green-500" />
+                          <a 
+                            href={metafields.product_video} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline text-xs"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View
+                          </a>
+                        </>
+                      ) : (
+                        <X className="h-4 w-4 text-gray-400" />
+                      )}
+                    </div>
+                    
+                    {/* Reviews */}
+                    <div className="flex items-center gap-1">
+                      {reviewCount > 0 ? (
+                        <>
+                          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                          <span className="text-xs font-semibold">{avgRating}/5</span>
+                          <span className="text-xs text-gray-500">({reviewCount})</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400 text-xs">No reviews</span>
+                      )}
+                    </div>
+                  </div>
+                  
                   <p className="text-sm text-muted-foreground">
                     {product.product_type} • {product.vendor}
                   </p>
