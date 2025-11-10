@@ -18,6 +18,7 @@ const Orders = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [courierFilter, setCourierFilter] = useState("all");
+  const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [syncing, setSyncing] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [courierStats, setCourierStats] = useState<any[]>([]);
@@ -32,7 +33,7 @@ const Orders = () => {
     loadOrders();
     loadStats();
     loadCourierStats();
-  }, [statusFilter, courierFilter]);
+  }, [statusFilter, courierFilter, deliveryFilter]);
 
   const loadStats = async () => {
     // Get total orders
@@ -84,6 +85,10 @@ const Orders = () => {
     if (courierFilter !== "all") {
       query = query.eq("courier_name", courierFilter);
     }
+    
+    if (deliveryFilter === "delivered") {
+      query = query.not("actual_delivery_date", "is", null);
+    }
 
     const { data } = await query;
     if (data) setOrders(data);
@@ -92,7 +97,7 @@ const Orders = () => {
   const loadCourierStats = async () => {
     const { data: courierData } = await supabase
       .from("shopify_orders")
-      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status")
+      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status, created_at, shipping_address")
       .not("courier_name", "is", null);
 
     if (!courierData) return;
@@ -113,10 +118,19 @@ const Orders = () => {
       
       statsMap[courier].total++;
       
-      if (order.actual_delivery_date && order.estimated_delivery_date) {
+      if (order.actual_delivery_date && order.created_at) {
         const actual = new Date(order.actual_delivery_date);
-        const estimated = new Date(order.estimated_delivery_date);
-        const diffDays = Math.ceil((actual.getTime() - estimated.getTime()) / (1000 * 60 * 60 * 24));
+        const dispatched = new Date(order.created_at);
+        const shippingAddress = order.shipping_address as any;
+        const city = shippingAddress?.city?.toLowerCase() || "";
+        const isKarachi = city.includes("karachi");
+        
+        // Calculate expected delivery days from dispatch
+        const expectedDays = isKarachi ? 2 : 5;
+        const expectedDelivery = new Date(dispatched);
+        expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
+        
+        const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
         
         if (diffDays < 0) {
           statsMap[courier].early++;
@@ -181,23 +195,56 @@ const Orders = () => {
   };
 
   const getDeliveryPerformance = (order: any) => {
-    if (!order.actual_delivery_date || !order.estimated_delivery_date) {
+    if (!order.actual_delivery_date) {
       if (order.fulfillment_status === "fulfilled") {
-        return { text: "In Transit", color: "bg-yellow-100 text-yellow-800", days: null };
+        return { text: "In Transit", color: "bg-yellow-100 text-yellow-800", days: null, time: null };
       }
-      return { text: "Pending", color: "bg-gray-100 text-gray-800", days: null };
+      return { text: "Pending", color: "bg-gray-100 text-gray-800", days: null, time: null };
     }
 
     const actual = new Date(order.actual_delivery_date);
-    const estimated = new Date(order.estimated_delivery_date);
-    const diffDays = Math.ceil((actual.getTime() - estimated.getTime()) / (1000 * 60 * 60 * 24));
+    const dispatched = new Date(order.created_at);
+    const shippingAddress = order.shipping_address as any;
+    const city = shippingAddress?.city?.toLowerCase() || "";
+    const isKarachi = city.includes("karachi");
+    
+    // Calculate expected delivery based on Karachi/outside criteria
+    const expectedDays = isKarachi ? 2 : 5;
+    const expectedDelivery = new Date(dispatched);
+    expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
+    
+    const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Format delivery time
+    const deliveryTime = actual.toLocaleString('en-PK', { 
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    const deliveryDate = formatPakistanDate(actual.toISOString());
 
     if (diffDays < 0) {
-      return { text: `⚡ Early (${Math.abs(diffDays)}d)`, color: "bg-green-100 text-green-800", days: diffDays };
+      return { 
+        text: `⚡ Early (${Math.abs(diffDays)}d)`, 
+        color: "bg-green-100 text-green-800", 
+        days: diffDays,
+        time: `${deliveryDate} ${deliveryTime}`
+      };
     } else if (diffDays === 0) {
-      return { text: "✓ On-time", color: "bg-green-100 text-green-800", days: 0 };
+      return { 
+        text: "✓ On-time", 
+        color: "bg-green-100 text-green-800", 
+        days: 0,
+        time: `${deliveryDate} ${deliveryTime}`
+      };
     } else {
-      return { text: `⏰ Delayed (+${diffDays}d)`, color: "bg-red-100 text-red-800", days: diffDays };
+      return { 
+        text: `⏰ Delayed (+${diffDays}d)`, 
+        color: "bg-red-100 text-red-800", 
+        days: diffDays,
+        time: `${deliveryDate} ${deliveryTime}`
+      };
     }
   };
 
@@ -418,6 +465,15 @@ const Orders = () => {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={deliveryFilter} onValueChange={setDeliveryFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All Deliveries" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Deliveries</SelectItem>
+                  <SelectItem value="delivered">Delivered Only</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
           <CardContent>
@@ -432,6 +488,7 @@ const Orders = () => {
                   <TableHead>Total</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Performance</TableHead>
+                  <TableHead>Delivery Time</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
               </TableHeader>
@@ -483,10 +540,14 @@ const Orders = () => {
                         <Badge className={performance.color}>
                           {performance.text}
                         </Badge>
-                        {order.estimated_delivery_date && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Est: {new Date(order.estimated_delivery_date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {performance.time ? (
+                          <div className="text-sm font-medium">
+                            {performance.time}
                           </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
                       <TableCell>
