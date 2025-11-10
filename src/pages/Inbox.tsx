@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Send } from "lucide-react";
+import { CustomerIntelligencePanel } from "@/components/inbox/CustomerIntelligencePanel";
+import { QuickReplies } from "@/components/inbox/QuickReplies";
 
 const Inbox = () => {
   const [conversations, setConversations] = useState<any[]>([]);
@@ -78,13 +80,13 @@ const Inbox = () => {
 
   return (
     <Layout>
-      <div className="p-6 h-[calc(100vh-4rem)]">
+      <div className="p-6">
         <h1 className="text-3xl font-bold mb-6">Inbox</h1>
 
-        <div className="grid grid-cols-3 gap-4 h-[calc(100%-5rem)]">
-          {/* Conversations List */}
-          <Card className="col-span-1">
-            <ScrollArea className="h-full">
+        <div className="flex h-[calc(100vh-12rem)] gap-4">
+          {/* Left: Conversations (25%) */}
+          <div className="w-1/4 border-r">
+            <ScrollArea className="h-full bg-gray-50 rounded-lg">{" "}
               <div className="p-4 space-y-2">
                 {conversations.map((conv) => (
                   <div
@@ -109,10 +111,10 @@ const Inbox = () => {
                 ))}
               </div>
             </ScrollArea>
-          </Card>
+          </div>
 
-          {/* Message Thread */}
-          <Card className="col-span-2 flex flex-col">
+          {/* Middle: Chat (42%) */}
+          <div className="flex-1 flex flex-col bg-white rounded-lg border">
             {selectedPhone ? (
               <>
                 <div className="p-4 border-b">
@@ -129,7 +131,7 @@ const Inbox = () => {
                         <div
                           className={`max-w-[70%] rounded-lg p-3 ${
                             msg.direction === "outbound"
-                              ? "bg-primary text-secondary"
+                              ? "bg-gradient-to-r from-boost-yellow to-boost-amber text-boost-black"
                               : "bg-muted"
                           }`}
                         >
@@ -143,6 +145,8 @@ const Inbox = () => {
                   </div>
                 </ScrollArea>
 
+                <QuickReplies onSelectReply={(text) => setNewMessage(text)} />
+
                 <Separator />
 
                 <div className="p-4 flex gap-2">
@@ -152,7 +156,7 @@ const Inbox = () => {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                   />
-                  <Button onClick={handleSendMessage}>
+                  <Button onClick={handleSendMessage} className="bg-gradient-to-r from-boost-yellow to-boost-amber hover:from-boost-amber hover:to-boost-gold text-boost-black font-semibold">
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
@@ -162,7 +166,18 @@ const Inbox = () => {
                 Select a conversation to view messages
               </div>
             )}
-          </Card>
+          </div>
+
+          {/* Right: Customer Intelligence (33%) */}
+          <div className="w-1/3 border-l bg-white rounded-lg overflow-y-auto">
+            {selectedPhone ? (
+              <CustomerIntelligencePanel phoneNumber={selectedPhone} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Select a conversation
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Layout>

@@ -87,8 +87,11 @@ export type Database = {
           media_url: string | null
           message_type: string | null
           phone_number: string
+          response_time_seconds: number | null
+          sender: string | null
           sent_by: string | null
           sentiment: string | null
+          sentiment_score: number | null
           status: string | null
           whatsapp_message_id: string | null
         }
@@ -101,8 +104,11 @@ export type Database = {
           media_url?: string | null
           message_type?: string | null
           phone_number: string
+          response_time_seconds?: number | null
+          sender?: string | null
           sent_by?: string | null
           sentiment?: string | null
+          sentiment_score?: number | null
           status?: string | null
           whatsapp_message_id?: string | null
         }
@@ -115,8 +121,11 @@ export type Database = {
           media_url?: string | null
           message_type?: string | null
           phone_number?: string
+          response_time_seconds?: number | null
+          sender?: string | null
           sent_by?: string | null
           sentiment?: string | null
+          sentiment_score?: number | null
           status?: string | null
           whatsapp_message_id?: string | null
         }
@@ -163,10 +172,15 @@ export type Database = {
           context_data: Json | null
           created_at: string | null
           customer_name: string | null
+          escalated: boolean | null
+          human_replied_at: string | null
           last_intent: string | null
+          last_message_at: string | null
           last_product_list: Json | null
           last_product_viewed: string | null
           phone_number: string
+          resolved: boolean | null
+          status: string | null
           taken_over_at: string | null
           taken_over_by: string | null
           thread_id: string | null
@@ -179,10 +193,15 @@ export type Database = {
           context_data?: Json | null
           created_at?: string | null
           customer_name?: string | null
+          escalated?: boolean | null
+          human_replied_at?: string | null
           last_intent?: string | null
+          last_message_at?: string | null
           last_product_list?: Json | null
           last_product_viewed?: string | null
           phone_number: string
+          resolved?: boolean | null
+          status?: string | null
           taken_over_at?: string | null
           taken_over_by?: string | null
           thread_id?: string | null
@@ -195,10 +214,15 @@ export type Database = {
           context_data?: Json | null
           created_at?: string | null
           customer_name?: string | null
+          escalated?: boolean | null
+          human_replied_at?: string | null
           last_intent?: string | null
+          last_message_at?: string | null
           last_product_list?: Json | null
           last_product_viewed?: string | null
           phone_number?: string
+          resolved?: boolean | null
+          status?: string | null
           taken_over_at?: string | null
           taken_over_by?: string | null
           thread_id?: string | null
@@ -360,6 +384,8 @@ export type Database = {
           total_orders: number | null
           total_spend: number | null
           updated_at: string | null
+          vip: boolean | null
+          vip_since: string | null
         }
         Insert: {
           created_at?: string | null
@@ -379,6 +405,8 @@ export type Database = {
           total_orders?: number | null
           total_spend?: number | null
           updated_at?: string | null
+          vip?: boolean | null
+          vip_since?: string | null
         }
         Update: {
           created_at?: string | null
@@ -398,6 +426,8 @@ export type Database = {
           total_orders?: number | null
           total_spend?: number | null
           updated_at?: string | null
+          vip?: boolean | null
+          vip_since?: string | null
         }
         Relationships: []
       }
@@ -698,6 +728,7 @@ export type Database = {
       shopify_orders: {
         Row: {
           actual_delivered_at: string | null
+          actual_delivery_date: string | null
           billing_address: Json | null
           courier_name: string | null
           created_at: string | null
@@ -733,6 +764,7 @@ export type Database = {
         }
         Insert: {
           actual_delivered_at?: string | null
+          actual_delivery_date?: string | null
           billing_address?: Json | null
           courier_name?: string | null
           created_at?: string | null
@@ -768,6 +800,7 @@ export type Database = {
         }
         Update: {
           actual_delivered_at?: string | null
+          actual_delivery_date?: string | null
           billing_address?: Json | null
           courier_name?: string | null
           created_at?: string | null

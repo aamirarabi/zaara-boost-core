@@ -14,6 +14,13 @@ export default {
     },
     extend: {
       colors: {
+        boost: {
+          yellow: '#F9C400',
+          gold: '#FFD700',
+          amber: '#FFA500',
+          black: '#1D1D1D',
+          gray: '#2D2D2D',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

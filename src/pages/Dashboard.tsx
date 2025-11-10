@@ -17,6 +17,9 @@ import { WarrantyReturns } from "@/components/dashboard/WarrantyReturns";
 import { PeakHours } from "@/components/dashboard/PeakHours";
 import { RevenueTrends } from "@/components/dashboard/RevenueTrends";
 import { InventoryAlerts } from "@/components/dashboard/InventoryAlerts";
+import { LiveClock } from "@/components/dashboard/LiveClock";
+import { RealTimeChatAnalytics } from "@/components/dashboard/RealTimeChatAnalytics";
+import { LatestReviewsWidget } from "@/components/dashboard/LatestReviewsWidget";
 import { format } from "date-fns";
 
 // Dashboard component with complete analytics
@@ -340,16 +343,25 @@ const Dashboard = () => {
         <DateRangeFilter selectedRange={dateRange} onRangeChange={setDateRange} />
 
         <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex justify-between items-center">
+          {/* Header with Clock */}
+          <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold">Dashboard</h1>
               <p className="text-muted-foreground">Complete business analytics and insights</p>
             </div>
-            <div className="flex gap-2">
-              <SyncShopifyButton onSyncComplete={() => loadStats()} />
-              <SyncCourierButton onSyncComplete={() => loadStats()} />
+            <div className="flex gap-4 items-start">
+              <div className="flex gap-2">
+                <SyncShopifyButton onSyncComplete={() => loadStats()} />
+                <SyncCourierButton onSyncComplete={() => loadStats()} />
+              </div>
+              <LiveClock />
             </div>
+          </div>
+
+          {/* New Widgets Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <RealTimeChatAnalytics />
+            <LatestReviewsWidget />
           </div>
 
           {/* Key Metrics Cards */}
