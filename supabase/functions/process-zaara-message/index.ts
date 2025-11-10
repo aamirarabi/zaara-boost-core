@@ -1084,10 +1084,36 @@ User query: ${message}`
           if (functionName === "search_shop_catalog") {
             const originalQuery = args.query.trim();
             const improvedQuery = improveSearchQuery(originalQuery);
-            const searchTerm = improvedQuery.toLowerCase();
             const categoryEmoji = getCategoryEmoji(originalQuery);
             
-            console.log(`🔍 Searching for: "${searchTerm}"`);
+            console.log(`🔍 Original search query: "${originalQuery}"`);
+            console.log(`🎯 Improved query: "${improvedQuery}"`);
+            
+            // Extract key product name words (Surge, Apex, Beat, etc.)
+            const productNameWords = [
+              'surge', 'apex', 'beat', 'reverb', 'pulse', 'wave',
+              'astro', 'cosmic', 'comfort', 'impulse', 'synergy',
+              'nova', 'throne', 'supreme'
+            ];
+            
+            // Check if query contains a product name
+            const containsProductName = productNameWords.some(name => 
+              originalQuery.toLowerCase().includes(name)
+            );
+            
+            // If query contains product name, add it to search terms
+            let searchTerms = improvedQuery;
+            if (containsProductName) {
+              // Extract the product name from query
+              const foundName = productNameWords.find(name => originalQuery.toLowerCase().includes(name));
+              if (foundName && !searchTerms.toLowerCase().includes(foundName)) {
+                searchTerms += `,${foundName}`;
+                console.log(`📝 Added product name to search: "${foundName}"`);
+              }
+            }
+            
+            console.log(`🔎 Final search terms: "${searchTerms}"`);
+            const searchTerm = searchTerms.toLowerCase();
             
             // IMPROVEMENT: Try exact match first for specific product requests
             const { data: exactMatch } = await supabase
@@ -1152,7 +1178,7 @@ User query: ${message}`
               const { data: products, error: searchError } = await supabase
                 .from("shopify_products")
                 .select("*")
-                .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
+                .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}},product_type.ilike.%${searchTerm}%`)
                 .eq("status", "active")  // ✅ Only active products
                 .order("price", { ascending: true })
                 .limit(limit);
@@ -1550,30 +1576,30 @@ User query: ${message}`
             const searchTerm = args.search_term.toLowerCase();
             console.log(`🔍 Searching FAQs for: "${searchTerm}"`);
             
-            // Search FAQs in database with ILIKE for flexible matching
-            // Search across question, answer, category, and keywords columns
+            // Search FAQs directly in database with flexible matching
             const { data: faqs, error: faqError } = await supabase
               .from("faq_vectors")
               .select("question, answer, category, video_urls, image_urls")
               .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,keywords.cs.{${searchTerm}}`)
               .eq("is_active", true)
-              .limit(3);
+              .limit(5);  // Increased to 5 for better results
             
             if (faqError) {
               console.error(`❌ FAQ search error:`, faqError);
               output = JSON.stringify({
                 found: false,
+                error: true,
                 message: `Error searching FAQs: ${faqError.message}`
               });
             } else if (faqs && faqs.length > 0) {
-              console.log(`✅ Found ${faqs.length} FAQs matching "${searchTerm}"`);
+              console.log(`✅ Found ${faqs.length} FAQs for "${searchTerm}"`);
               
               const enrichedFaqs = faqs.map((faq: any) => ({
                 question: faq.question,
                 answer: boldImportantInfo(faq.answer),
                 category: faq.category,
-                video_urls: faq.video_urls,
-                image_urls: faq.image_urls
+                video_urls: faq.video_urls || [],
+                image_urls: faq.image_urls || []
               }));
               
               output = JSON.stringify({
@@ -1585,7 +1611,7 @@ User query: ${message}`
               console.log(`ℹ️ No FAQs found for "${searchTerm}"`);
               output = JSON.stringify({
                 found: false,
-                message: `No FAQ found for "${searchTerm}". Customer can contact support at https://wa.me/923038981133`
+                message: `No FAQ found for "${searchTerm}". For assistance, contact our support team at https://wa.me/923038981133`
               });
             }
           }
