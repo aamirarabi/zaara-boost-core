@@ -9,6 +9,7 @@ import { OrderStatusChart } from "@/components/dashboard/OrderStatusChart";
 import { TopProductsTable } from "@/components/dashboard/TopProductsTable";
 import { CourierPerformance } from "@/components/dashboard/CourierPerformance";
 import { FAQGapAnalysis } from "@/components/dashboard/FAQGapAnalysis";
+import { SyncCourierButton } from "@/components/dashboard/SyncCourierButton";
 import { format } from "date-fns";
 
 const Dashboard = () => {
@@ -245,6 +246,7 @@ const Dashboard = () => {
               <h1 className="text-3xl font-bold">Dashboard</h1>
               <p className="text-muted-foreground">Complete business analytics and insights</p>
             </div>
+            <SyncCourierButton onSyncComplete={() => loadStats()} />
           </div>
 
           {/* Key Metrics Cards */}
