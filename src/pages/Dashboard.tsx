@@ -113,8 +113,9 @@ const Dashboard = () => {
     };
 
     console.log('📊 Stats calculated:', newStats);
-    console.log('📦 Orders count:', orders.count);
-    console.log('💰 Revenue data:', { revenueData: revenueData?.length, revenue });
+    console.log('📦 Orders count from API:', orders.count);
+    console.log('💰 Revenue data items:', revenueData?.length, 'Total revenue:', revenue);
+    console.log('🔍 Current state before update:', stats);
 
     setStats(newStats);
 
@@ -390,6 +391,17 @@ const Dashboard = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {/* DEBUG INFO */}
+            {stats.orders === 0 && (
+              <div className="col-span-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <p className="font-bold">Debug Info:</p>
+                <p>Orders: {stats.orders}</p>
+                <p>Revenue: {stats.revenue}</p>
+                <p>Date Range: {dateRange.label} ({dateRange.start.toISOString()} to {dateRange.end.toISOString()})</p>
+                <p>Check console for more details</p>
+              </div>
+            )}
+            
             <MetricCard
               title="Orders"
               value={stats.orders}
