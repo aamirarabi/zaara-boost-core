@@ -1573,26 +1573,49 @@ User query: ${message}`
             }
           }
           else if (functionName === "search_faqs") {
-            const searchTerm = args.search_term.toLowerCase();
-            console.log(`🔍 Searching FAQs for: "${searchTerm}"`);
+            const searchTerm = args.search_term.toLowerCase().trim();
+            console.log(`🔍 FAQ SEARCH REQUESTED for: "${searchTerm}"`);
             
-            // Search FAQs directly in database with flexible matching
-            const { data: faqs, error: faqError } = await supabase
+            // Strategy 1: Try exact phrase first
+            let { data: faqs, error: faqError } = await supabase
               .from("faq_vectors")
               .select("question, answer, category, video_urls, image_urls")
-              .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,keywords.cs.{${searchTerm}}`)
+              .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%`)
               .eq("is_active", true)
-              .limit(5);  // Increased to 5 for better results
+              .limit(5);
             
-            if (faqError) {
-              console.error(`❌ FAQ search error:`, faqError);
+            if (faqs && faqs.length > 0) {
+              console.log(`✅ Found ${faqs.length} FAQs with exact phrase: "${searchTerm}"`);
+            } else {
+              // Strategy 2: Try individual words
+              const words = searchTerm.split(' ').filter(w => w.length > 2);
+              console.log(`🔄 Trying word-by-word search:`, words);
+              
+              for (const word of words) {
+                const { data: wordResults } = await supabase
+                  .from("faq_vectors")
+                  .select("question, answer, category, video_urls, image_urls")
+                  .or(`question.ilike.%${word}%,answer.ilike.%${word}%`)
+                  .eq("is_active", true)
+                  .limit(5);
+                
+                if (wordResults && wordResults.length > 0) {
+                  faqs = wordResults;
+                  console.log(`✅ Found ${faqs.length} FAQs with word: "${word}"`);
+                  break;
+                }
+              }
+            }
+            
+            if (!faqs || faqs.length === 0) {
+              console.log(`❌ NO FAQs FOUND for "${searchTerm}" - returning not found`);
               output = JSON.stringify({
                 found: false,
-                error: true,
-                message: `Error searching FAQs: ${faqError.message}`
+                search_term: searchTerm,
+                message: `No FAQ found for "${searchTerm}". For assistance, contact our support team at https://wa.me/923038981133`
               });
-            } else if (faqs && faqs.length > 0) {
-              console.log(`✅ Found ${faqs.length} FAQs for "${searchTerm}"`);
+            } else {
+              console.log(`✅ RETURNING ${faqs.length} FAQs to OpenAI`);
               
               const enrichedFaqs = faqs.map((faq: any) => ({
                 question: faq.question,
@@ -1605,13 +1628,8 @@ User query: ${message}`
               output = JSON.stringify({
                 found: true,
                 count: faqs.length,
+                search_term: searchTerm,
                 faqs: enrichedFaqs
-              });
-            } else {
-              console.log(`ℹ️ No FAQs found for "${searchTerm}"`);
-              output = JSON.stringify({
-                found: false,
-                message: `No FAQ found for "${searchTerm}". For assistance, contact our support team at https://wa.me/923038981133`
               });
             }
           }
