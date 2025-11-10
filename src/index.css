@@ -44,6 +44,26 @@ All colors MUST be HSL.
 
     --radius: 0.5rem;
 
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 100%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(45 98% 49%), hsl(38 92% 50%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(142 71% 35%));
+    --gradient-info: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 50%));
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%), hsl(40 10% 98%));
+
+    /* Shadows */
+    --shadow-elegant: 0 10px 30px -10px hsl(45 98% 49% / 0.2);
+    --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
     --sidebar-background: 40 5% 11%;
     --sidebar-foreground: 0 0% 100%;
     --sidebar-primary: 45 98% 49%;
@@ -85,9 +105,25 @@ All colors MUST be HSL.
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 100%;
+
     --border: 40 5% 18%;
     --input: 40 5% 18%;
     --ring: 45 98% 49%;
+
+    /* Dark mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(45 98% 49%), hsl(38 92% 50%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(142 71% 35%));
+    --gradient-info: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 50%));
+    --gradient-subtle: linear-gradient(180deg, hsl(40 5% 11%), hsl(40 5% 14%));
+
+    --shadow-elegant: 0 10px 30px -10px hsl(45 98% 49% / 0.3);
+    --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+    --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.2);
 
     --sidebar-background: 40 5% 11%;
     --sidebar-foreground: 0 0% 100%;
@@ -107,5 +143,43 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50;
+  }
+
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-hover {
+    box-shadow: var(--shadow-hover);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+
+  .gradient-info {
+    background: var(--gradient-info);
+  }
+
+  .gradient-subtle {
+    background: var(--gradient-subtle);
   }
 }

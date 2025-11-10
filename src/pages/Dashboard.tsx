@@ -10,6 +10,12 @@ import { TopProductsTable } from "@/components/dashboard/TopProductsTable";
 import { CourierPerformance } from "@/components/dashboard/CourierPerformance";
 import { FAQGapAnalysis } from "@/components/dashboard/FAQGapAnalysis";
 import { SyncCourierButton } from "@/components/dashboard/SyncCourierButton";
+import { ProductComplaints } from "@/components/dashboard/ProductComplaints";
+import { CustomerSentiment } from "@/components/dashboard/CustomerSentiment";
+import { WarrantyReturns } from "@/components/dashboard/WarrantyReturns";
+import { PeakHours } from "@/components/dashboard/PeakHours";
+import { RevenueTrends } from "@/components/dashboard/RevenueTrends";
+import { InventoryAlerts } from "@/components/dashboard/InventoryAlerts";
 import { format } from "date-fns";
 
 const Dashboard = () => {
@@ -233,6 +239,86 @@ const Dashboard = () => {
     loadStats();
   };
 
+  // Sample data for new sections
+  const sampleComplaints = [
+    { rank: 1, productName: "Beat Wireless ANC - Black", complaints: 8, rating: 3.2, topIssues: ["Battery dies quickly", "Sound cuts off"], priority: 'critical' as const },
+    { rank: 2, productName: "Boost Surge Pro Chair", complaints: 6, rating: 3.8, topIssues: ["Armrest broken", "Squeaky wheels"], priority: 'review' as const },
+    { rank: 3, productName: "Boost Hawk Earbuds", complaints: 5, rating: 4.0, topIssues: ["Connectivity issues"], priority: 'review' as const },
+  ];
+
+  const sentimentData = {
+    positive: 156,
+    neutral: 45,
+    negative: 12,
+    timeline: [
+      { date: 'Nov 4', positive: 20, neutral: 8, negative: 2 },
+      { date: 'Nov 5', positive: 25, neutral: 6, negative: 3 },
+      { date: 'Nov 6', positive: 22, neutral: 7, negative: 1 },
+      { date: 'Nov 7', positive: 28, neutral: 9, negative: 2 },
+      { date: 'Nov 8', positive: 30, neutral: 8, negative: 2 },
+      { date: 'Nov 9', positive: 31, neutral: 7, negative: 2 },
+    ],
+    topNegative: [
+      { issue: "Delayed delivery", count: 8 },
+      { issue: "Product different from photo", count: 5 },
+      { issue: "Poor quality", count: 4 },
+    ]
+  };
+
+  const peakHoursData = {
+    peakTime: "2:00 PM - 5:00 PM",
+    peakPercentage: 67,
+    heatmapData: [
+      [20, 25, 22, 28, 30, 35, 18], // 9 AM
+      [35, 38, 35, 40, 42, 50, 25], // 10AM
+      [55, 58, 52, 60, 62, 68, 35], // 11AM
+      [68, 70, 65, 72, 75, 80, 50], // 12PM
+      [75, 78, 72, 80, 82, 90, 68], // 1 PM
+      [95, 98, 95, 98, 100, 98, 95], // 2 PM
+      [98, 100, 98, 100, 98, 100, 98], // 3 PM
+      [92, 95, 90, 95, 92, 98, 85], // 4 PM
+      [65, 68, 62, 70, 68, 75, 60], // 5 PM
+      [45, 48, 42, 50, 48, 55, 40], // 6 PM
+      [28, 30, 25, 32, 30, 35, 22], // 7 PM
+      [15, 18, 12, 20, 18, 22, 10], // 8 PM
+    ],
+    busiestDay: "Saturday",
+    busiestDayPercent: 32,
+    slowestDay: "Sunday",
+    slowestDayPercent: 8
+  };
+
+  const revenueTrendsData = {
+    totalRevenue: 4985248,
+    avgOrderValue: 26376,
+    dailyAverage: 712178,
+    dailyData: [
+      { date: 'Nov 3', revenue: 345600 },
+      { date: 'Nov 4', revenue: 567800 },
+      { date: 'Nov 5', revenue: 689400 },
+      { date: 'Nov 6', revenue: 756200 },
+      { date: 'Nov 7', revenue: 834500 },
+      { date: 'Nov 8', revenue: 982450 },
+      { date: 'Nov 9', revenue: 809298 },
+    ],
+    bestDay: { date: 'Nov 8', revenue: 982450 },
+    lowestDay: { date: 'Nov 3', revenue: 345600 }
+  };
+
+  const inventoryData = {
+    items: [
+      { product: "Beat Wireless ANC - Black", stock: 0, status: 'out' as const, weeklySales: 12 },
+      { product: "Boost Surge Pro Chair", stock: 2, status: 'critical' as const, weeklySales: 8 },
+      { product: "Luna RGB Keyboard", stock: 3, status: 'low' as const, weeklySales: 5 },
+    ],
+    stockValue: 2400000,
+    turnoverDays: 15,
+    predictions: [
+      { product: "Surge Pro Chair", daysLeft: 3 },
+      { product: "Nova Mouse", daysLeft: 7 },
+    ]
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -335,8 +421,44 @@ const Dashboard = () => {
           {/* Top Products Table */}
           {topProducts.length > 0 && <TopProductsTable products={topProducts} />}
 
+          {/* NEW: Product Complaints */}
+          <ProductComplaints complaints={sampleComplaints} />
+
+          {/* NEW: Inventory Alerts */}
+          <InventoryAlerts {...inventoryData} />
+
+          {/* NEW: Revenue Trends */}
+          <RevenueTrends {...revenueTrendsData} />
+
+          {/* NEW: Customer Sentiment */}
+          <CustomerSentiment data={sentimentData} />
+
+          {/* NEW: Peak Hours */}
+          <PeakHours {...peakHoursData} />
+
           {/* Courier Performance */}
           {courierStats.length > 0 && <CourierPerformance couriers={courierStats} />}
+
+          {/* NEW: Warranty & Returns */}
+          <WarrantyReturns 
+            warrantyClaims={12}
+            warrantyChange={15}
+            returns={8}
+            returnsChange={-20}
+            refunds={45600}
+            refundsChange={-10}
+            topReturns={[
+              { product: "Beat Wireless ANC - Black", returns: 3, rate: 8.1, reason: "Defective" },
+              { product: "Boost Surge Pro Chair", returns: 2, rate: 2.1, reason: "Size issue" },
+              { product: "Boost Hawk Earbuds", returns: 2, rate: 20, reason: "Not as described" },
+            ]}
+            returnReasons={[
+              { name: "Defective", value: 45, color: "hsl(var(--danger))" },
+              { name: "Not as Described", value: 30, color: "hsl(var(--warning))" },
+              { name: "Size/Fit", value: 15, color: "hsl(var(--info))" },
+              { name: "Changed Mind", value: 10, color: "hsl(var(--muted))" },
+            ]}
+          />
 
           {/* FAQ Gap Analysis */}
           {faqGaps.length > 0 && (
