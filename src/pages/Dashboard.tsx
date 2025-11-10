@@ -18,6 +18,7 @@ import { RevenueTrends } from "@/components/dashboard/RevenueTrends";
 import { InventoryAlerts } from "@/components/dashboard/InventoryAlerts";
 import { format } from "date-fns";
 
+// Dashboard component with complete analytics
 const Dashboard = () => {
   const [dateRange, setDateRange] = useState({
     start: new Date(),
