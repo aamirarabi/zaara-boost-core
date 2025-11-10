@@ -20,9 +20,21 @@ import { format } from "date-fns";
 
 // Dashboard component with complete analytics
 const Dashboard = () => {
+  const getTodayStart = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  };
+
+  const getTodayEnd = () => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return today;
+  };
+
   const [dateRange, setDateRange] = useState({
-    start: new Date(),
-    end: new Date(),
+    start: getTodayStart(),
+    end: getTodayEnd(),
     label: "Today"
   });
 

@@ -14,10 +14,22 @@ interface DateRangeFilterProps {
 }
 
 export const DateRangeFilter = ({ selectedRange, onRangeChange }: DateRangeFilterProps) => {
+  const getTodayStart = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  };
+
+  const getTodayEnd = () => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return today;
+  };
+
   const ranges: DateRange[] = [
     {
-      start: new Date(),
-      end: new Date(),
+      start: getTodayStart(),
+      end: getTodayEnd(),
       label: "Today"
     },
     {
