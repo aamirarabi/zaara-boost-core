@@ -62,6 +62,12 @@ const Dashboard = () => {
   }, [dateRange]);
 
   const loadStats = async () => {
+    console.log('🔄 Loading stats for date range:', {
+      start: dateRange.start.toISOString(),
+      end: dateRange.end.toISOString(),
+      label: dateRange.label
+    });
+
     // Get counts
     const [customers, productsCount, orders, messages] = await Promise.all([
       supabase.from("customers").select("*", { count: "exact", head: true }),
@@ -94,14 +100,20 @@ const Dashboard = () => {
 
     const apiCosts = apiCostsData?.reduce((sum, log) => sum + (parseFloat(String(log.cost_pkr || 0)) || 0), 0) || 0;
 
-    setStats({
+    const newStats = {
       customers: customers.count || 0,
       products: productsCount.count || 0,
       orders: orders.count || 0,
       messages: messages.count || 0,
       revenue,
       apiCosts,
-    });
+    };
+
+    console.log('📊 Stats calculated:', newStats);
+    console.log('📦 Orders count:', orders.count);
+    console.log('💰 Revenue data:', { revenueData: revenueData?.length, revenue });
+
+    setStats(newStats);
 
     // Load order timeline
     const { data: ordersByDate } = await supabase
@@ -122,7 +134,9 @@ const Dashboard = () => {
       if (order.fulfillment_status === 'cancelled') timelineMap[date].cancelled++;
     });
 
-    setOrderTimeline(Object.values(timelineMap));
+    const timelineData = Object.values(timelineMap);
+    console.log('📈 Order timeline:', timelineData);
+    setOrderTimeline(timelineData);
 
     // Load order status data
     const { data: statusData } = await supabase
@@ -145,13 +159,14 @@ const Dashboard = () => {
       returned: 'hsl(var(--secondary))',
     };
 
-    setOrderStatusData(
-      Object.entries(statusMap).map(([name, value]) => ({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        value,
-        color: statusColors[name] || 'hsl(var(--muted))',
-      }))
-    );
+    const statusChartData = Object.entries(statusMap).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value,
+      color: statusColors[name] || 'hsl(var(--muted))',
+    }));
+
+    console.log('🥧 Order status data:', statusChartData);
+    setOrderStatusData(statusChartData);
 
     // Load top products
     const { data: orderItems } = await supabase
@@ -183,6 +198,7 @@ const Dashboard = () => {
       .slice(0, 10)
       .map((p: any, i: number) => ({ ...p, rank: i + 1 }));
 
+    console.log('🏆 Top products:', topProductsList);
     setTopProducts(topProductsList);
 
     // Load courier stats
