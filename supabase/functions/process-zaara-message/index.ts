@@ -1574,60 +1574,83 @@ User query: ${message}`
           }
           else if (functionName === "search_faqs") {
             const searchTerm = args.search_term.toLowerCase().trim();
-            console.log(`🔍 FAQ SEARCH REQUESTED for: "${searchTerm}"`);
+            console.log(`🔍 FAQ SEARCH for: "${searchTerm}"`);
             
-            // Strategy 1: Try exact phrase first
-            let { data: faqs, error: faqError } = await supabase
+            let allFaqs: any[] = [];
+            
+            // Strategy 1: Try exact phrase
+            const { data: exactResults } = await supabase
               .from("faq_vectors")
-              .select("question, answer, category, video_urls, image_urls")
+              .select("id, question, answer, category, video_urls, image_urls")
               .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%`)
               .eq("is_active", true)
               .limit(5);
             
-            if (faqs && faqs.length > 0) {
-              console.log(`✅ Found ${faqs.length} FAQs with exact phrase: "${searchTerm}"`);
+            if (exactResults && exactResults.length > 0) {
+              allFaqs = exactResults;
+              console.log(`✅ Found ${exactResults.length} with exact phrase`);
             } else {
-              // Strategy 2: Try individual words
+              // Strategy 2: Word-by-word search (collect ALL matches)
               const words = searchTerm.split(' ').filter((w: string) => w.length > 2);
-              console.log(`🔄 Trying word-by-word search:`, words);
+              console.log(`🔄 Trying individual words:`, words);
+              
+              const seenIds = new Set<string>();
               
               for (const word of words) {
                 const { data: wordResults } = await supabase
                   .from("faq_vectors")
-                  .select("question, answer, category, video_urls, image_urls")
+                  .select("id, question, answer, category, video_urls, image_urls")
                   .or(`question.ilike.%${word}%,answer.ilike.%${word}%`)
                   .eq("is_active", true)
-                  .limit(5);
+                  .limit(3);
                 
                 if (wordResults && wordResults.length > 0) {
-                  faqs = wordResults;
-                  console.log(`✅ Found ${faqs.length} FAQs with word: "${word}"`);
-                  break;
+                  // Add unique results only
+                  for (const result of wordResults) {
+                    if (!seenIds.has(result.id)) {
+                      seenIds.add(result.id);
+                      allFaqs.push(result);
+                      if (allFaqs.length >= 5) break; // Max 5 total
+                    }
+                  }
+                  console.log(`✅ Found ${wordResults.length} with "${word}"`);
                 }
+                
+                if (allFaqs.length >= 5) break;
               }
             }
             
-            if (!faqs || faqs.length === 0) {
-              console.log(`❌ NO FAQs FOUND for "${searchTerm}" - returning not found`);
+            if (allFaqs.length === 0) {
+              console.log(`❌ NO FAQs found for "${searchTerm}"`);
               output = JSON.stringify({
                 found: false,
                 search_term: searchTerm,
-                message: `No FAQ found for "${searchTerm}". For assistance, contact our support team at https://wa.me/923038981133`
+                message: `No FAQ found. Contact support: https://wa.me/923038981133`
               });
             } else {
-              console.log(`✅ RETURNING ${faqs.length} FAQs to OpenAI`);
+              console.log(`✅ Returning ${allFaqs.length} FAQs`);
               
-              const enrichedFaqs = faqs.map((faq: any) => ({
-                question: faq.question,
-                answer: boldImportantInfo(faq.answer),
-                category: faq.category,
-                video_urls: faq.video_urls || [],
-                image_urls: faq.image_urls || []
-              }));
+              // Fix URLs and format
+              const enrichedFaqs = allFaqs.map((faq: any) => {
+                let fixedAnswer = faq.answer || '';
+                
+                // Fix malformed URLs (https:youtube → https://youtube)
+                fixedAnswer = fixedAnswer.replace(/https:([^\/])/g, 'https://$1');
+                fixedAnswer = fixedAnswer.replace(/http:([^\/])/g, 'http://$1');
+                fixedAnswer = boldImportantInfo(fixedAnswer);
+                
+                return {
+                  question: faq.question,
+                  answer: fixedAnswer,
+                  category: faq.category,
+                  video_urls: faq.video_urls || [],
+                  image_urls: faq.image_urls || []
+                };
+              });
               
               output = JSON.stringify({
                 found: true,
-                count: faqs.length,
+                count: allFaqs.length,
                 search_term: searchTerm,
                 faqs: enrichedFaqs
               });

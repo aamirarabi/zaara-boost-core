@@ -17,27 +17,12 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [category, setCategory] = useState("");
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [keywordInput, setKeywordInput] = useState("");
+  const [category, setCategory] = useState("general");
   const [videoUrls, setVideoUrls] = useState<string[]>([]);
   const [videoInput, setVideoInput] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imageInput, setImageInput] = useState("");
-  const [relatedProducts, setRelatedProducts] = useState<string[]>([]);
-  const [productInput, setProductInput] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const addKeyword = () => {
-    if (keywordInput.trim() && !keywords.includes(keywordInput.trim())) {
-      setKeywords([...keywords, keywordInput.trim()]);
-      setKeywordInput("");
-    }
-  };
-
-  const removeKeyword = (keyword: string) => {
-    setKeywords(keywords.filter((k) => k !== keyword));
-  };
 
   const addVideoUrl = () => {
     if (videoInput.trim() && !videoUrls.includes(videoInput.trim())) {
@@ -61,22 +46,11 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
     setImageUrls(imageUrls.filter((u) => u !== url));
   };
 
-  const addProduct = () => {
-    if (productInput.trim() && !relatedProducts.includes(productInput.trim())) {
-      setRelatedProducts([...relatedProducts, productInput.trim()]);
-      setProductInput("");
-    }
-  };
-
-  const removeProduct = (product: string) => {
-    setRelatedProducts(relatedProducts.filter((p) => p !== product));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!question.trim() || !answer.trim() || !category.trim()) {
-      toast.error("Please fill in question, answer, and category");
+    if (!question.trim() || !answer.trim()) {
+      toast.error("Please fill in question and answer");
       return;
     }
 
@@ -89,10 +63,10 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
         question: question.trim(),
         answer: answer.trim(),
         category: category.trim(),
-        keywords: keywords,
+        keywords: [],
         video_urls: videoUrls,
         image_urls: imageUrls,
-        related_products: relatedProducts,
+        related_products: [],
         is_active: true,
         created_by: user?.email || "unknown",
         created_at: new Date().toISOString(),
@@ -106,11 +80,9 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
       // Reset form
       setQuestion("");
       setAnswer("");
-      setCategory("");
-      setKeywords([]);
+      setCategory("general");
       setVideoUrls([]);
       setImageUrls([]);
-      setRelatedProducts([]);
       setOpen(false);
       onSuccess();
     } catch (error) {
@@ -158,42 +130,24 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="category">Category *</Label>
-            <Input
+            <Label htmlFor="category">Category (Optional)</Label>
+            <select
               id="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g., battery, warranty, shipping"
-              required
-            />
+              className="w-full h-10 px-3 rounded-md border border-input bg-background"
+            >
+              <option value="general">General</option>
+              <option value="product">Product</option>
+              <option value="shipping">Shipping</option>
+              <option value="warranty">Warranty</option>
+              <option value="payment">Payment</option>
+              <option value="technical">Technical</option>
+            </select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="keywords">Keywords</Label>
-            <div className="flex gap-2">
-              <Input
-                id="keywords"
-                value={keywordInput}
-                onChange={(e) => setKeywordInput(e.target.value)}
-                placeholder="Add keyword"
-                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addKeyword())}
-              />
-              <Button type="button" onClick={addKeyword} variant="secondary">
-                Add
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {keywords.map((keyword) => (
-                <Badge key={keyword} variant="secondary" className="cursor-pointer" onClick={() => removeKeyword(keyword)}>
-                  {keyword}
-                  <X className="ml-1 h-3 w-3" />
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="videoUrls">Video URLs</Label>
+            <Label htmlFor="videoUrls">Video URLs (Optional)</Label>
             <div className="flex gap-2">
               <Input
                 id="videoUrls"
@@ -221,7 +175,7 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="imageUrls">Image URLs</Label>
+            <Label htmlFor="imageUrls">Image URLs (Optional)</Label>
             <div className="flex gap-2">
               <Input
                 id="imageUrls"
@@ -244,30 +198,6 @@ export const CreateFAQDialog = ({ onSuccess }: CreateFAQDialogProps) => {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="products">Related Products</Label>
-            <div className="flex gap-2">
-              <Input
-                id="products"
-                value={productInput}
-                onChange={(e) => setProductInput(e.target.value)}
-                placeholder="Product ID or name"
-                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addProduct())}
-              />
-              <Button type="button" onClick={addProduct} variant="secondary">
-                Add
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {relatedProducts.map((product) => (
-                <Badge key={product} variant="outline" className="cursor-pointer" onClick={() => removeProduct(product)}>
-                  {product}
-                  <X className="ml-1 h-3 w-3" />
-                </Badge>
               ))}
             </div>
           </div>

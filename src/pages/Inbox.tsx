@@ -7,15 +7,28 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Send } from "lucide-react";
+import { Send, Trash2 } from "lucide-react";
 import { CustomerIntelligencePanel } from "@/components/inbox/CustomerIntelligencePanel";
 import { QuickReplies } from "@/components/inbox/QuickReplies";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Inbox = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [phoneToDelete, setPhoneToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     loadConversations();
@@ -78,6 +91,45 @@ const Inbox = () => {
     }
   };
 
+  const handleDeleteChat = async () => {
+    if (!phoneToDelete) return;
+
+    try {
+      // Delete from chat_history
+      const { error: chatError } = await supabase
+        .from("chat_history")
+        .delete()
+        .eq("phone_number", phoneToDelete);
+
+      // Delete from conversation_context
+      const { error: contextError } = await supabase
+        .from("conversation_context")
+        .delete()
+        .eq("phone_number", phoneToDelete);
+
+      if (chatError || contextError) {
+        toast.error("Failed to delete chat");
+      } else {
+        toast.success("Chat deleted successfully");
+        if (selectedPhone === phoneToDelete) {
+          setSelectedPhone(null);
+          setMessages([]);
+        }
+        loadConversations();
+      }
+    } catch (error) {
+      toast.error("Error deleting chat");
+    } finally {
+      setDeleteDialogOpen(false);
+      setPhoneToDelete(null);
+    }
+  };
+
+  const openDeleteDialog = (phone: string) => {
+    setPhoneToDelete(phone);
+    setDeleteDialogOpen(true);
+  };
+
   return (
     <Layout>
       <div className="p-6">
@@ -91,22 +143,32 @@ const Inbox = () => {
                 {conversations.map((conv) => (
                   <div
                     key={conv.phone_number}
-                    onClick={() => handleSelectConversation(conv.phone_number)}
-                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
                       selectedPhone === conv.phone_number
                         ? "bg-primary text-secondary"
                         : "hover:bg-muted"
                     }`}
                   >
-                    <Avatar>
+                    <Avatar onClick={() => handleSelectConversation(conv.phone_number)} className="cursor-pointer">
                       <AvatarFallback>{conv.phone_number.slice(-2)}</AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden cursor-pointer" onClick={() => handleSelectConversation(conv.phone_number)}>
                       <p className="font-medium truncate">{conv.phone_number}</p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(conv.created_at).toLocaleTimeString()}
                       </p>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDeleteDialog(conv.phone_number);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -117,8 +179,15 @@ const Inbox = () => {
           <div className="flex-1 flex flex-col bg-white rounded-lg border">
             {selectedPhone ? (
               <>
-                <div className="p-4 border-b">
+                <div className="p-4 border-b flex justify-between items-center">
                   <h2 className="font-semibold">{selectedPhone}</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openDeleteDialog(selectedPhone)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
 
                 <ScrollArea className="flex-1 p-4">
@@ -179,6 +248,23 @@ const Inbox = () => {
             )}
           </div>
         </div>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Chat</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete all messages for {phoneToDelete}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteChat} className="bg-destructive text-destructive-foreground">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
