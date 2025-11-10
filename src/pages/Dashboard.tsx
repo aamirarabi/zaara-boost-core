@@ -10,6 +10,7 @@ import { TopProductsTable } from "@/components/dashboard/TopProductsTable";
 import { CourierPerformance } from "@/components/dashboard/CourierPerformance";
 import { FAQGapAnalysis } from "@/components/dashboard/FAQGapAnalysis";
 import { SyncCourierButton } from "@/components/dashboard/SyncCourierButton";
+import { SyncShopifyButton } from "@/components/dashboard/SyncShopifyButton";
 import { ProductComplaints } from "@/components/dashboard/ProductComplaints";
 import { CustomerSentiment } from "@/components/dashboard/CustomerSentiment";
 import { WarrantyReturns } from "@/components/dashboard/WarrantyReturns";
@@ -345,7 +346,10 @@ const Dashboard = () => {
               <h1 className="text-3xl font-bold">Dashboard</h1>
               <p className="text-muted-foreground">Complete business analytics and insights</p>
             </div>
-            <SyncCourierButton onSyncComplete={() => loadStats()} />
+            <div className="flex gap-2">
+              <SyncShopifyButton onSyncComplete={() => loadStats()} />
+              <SyncCourierButton onSyncComplete={() => loadStats()} />
+            </div>
           </div>
 
           {/* Key Metrics Cards */}
