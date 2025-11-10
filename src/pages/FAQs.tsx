@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Search, Upload, Loader2 } from "lucide-react";
+import { CreateFAQDialog } from "@/components/faq/CreateFAQDialog";
+import { format } from "date-fns";
 
 const FAQs = () => {
   const [faqs, setFaqs] = useState<any[]>([]);
@@ -79,7 +81,8 @@ const FAQs = () => {
             <h1 className="text-3xl font-bold">FAQs</h1>
             <p className="text-muted-foreground">Manage frequently asked questions</p>
           </div>
-          <div>
+          <div className="flex gap-2">
+            <CreateFAQDialog onSuccess={loadFAQs} />
             <input
               type="file"
               accept=".json"
@@ -88,7 +91,7 @@ const FAQs = () => {
               id="faq-upload"
               disabled={uploading}
             />
-            <Button asChild disabled={uploading}>
+            <Button asChild disabled={uploading} variant="outline">
               <label htmlFor="faq-upload" className="cursor-pointer">
                 {uploading ? (
                   <>
@@ -129,7 +132,27 @@ const FAQs = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">{faq.answer}</p>
+                <p className="text-muted-foreground whitespace-pre-wrap">{faq.answer}</p>
+                
+                {faq.video_urls && faq.video_urls.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium mb-2">Video Tutorials:</p>
+                    <div className="flex flex-col gap-2">
+                      {faq.video_urls.map((url: string, i: number) => (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline"
+                        >
+                          📹 {url}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 {faq.keywords && faq.keywords.length > 0 && (
                   <div className="mt-4 flex gap-2 flex-wrap">
                     {faq.keywords.map((keyword: string, i: number) => (
@@ -139,6 +162,23 @@ const FAQs = () => {
                     ))}
                   </div>
                 )}
+                
+                <div className="mt-4 pt-4 border-t text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {faq.created_by && (
+                      <span>Created by: <span className="font-medium">{faq.created_by}</span></span>
+                    )}
+                    {faq.created_at && (
+                      <span>on {format(new Date(faq.created_at), "MMM d, yyyy 'at' h:mm a")}</span>
+                    )}
+                    {faq.updated_by && (
+                      <span className="ml-auto">Last edited by: <span className="font-medium">{faq.updated_by}</span></span>
+                    )}
+                    {faq.edited_at && (
+                      <span>on {format(new Date(faq.edited_at), "MMM d, yyyy 'at' h:mm a")}</span>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ))}

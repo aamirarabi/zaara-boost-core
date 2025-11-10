@@ -1588,7 +1588,7 @@ User query: ${message}`
               console.log(`✅ Found ${faqs.length} FAQs with exact phrase: "${searchTerm}"`);
             } else {
               // Strategy 2: Try individual words
-              const words = searchTerm.split(' ').filter(w => w.length > 2);
+              const words = searchTerm.split(' ').filter((w: string) => w.length > 2);
               console.log(`🔄 Trying word-by-word search:`, words);
               
               for (const word of words) {

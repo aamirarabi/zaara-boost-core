@@ -499,6 +499,8 @@ export type Database = {
           answer: string
           category: string | null
           created_at: string | null
+          created_by: string | null
+          edited_at: string | null
           helpful_count: number | null
           id: string
           image_urls: string[] | null
@@ -509,6 +511,7 @@ export type Database = {
           question: string
           related_products: string[] | null
           updated_at: string | null
+          updated_by: string | null
           usage_count: number | null
           video_urls: string[] | null
         }
@@ -516,6 +519,8 @@ export type Database = {
           answer: string
           category?: string | null
           created_at?: string | null
+          created_by?: string | null
+          edited_at?: string | null
           helpful_count?: number | null
           id: string
           image_urls?: string[] | null
@@ -526,6 +531,7 @@ export type Database = {
           question: string
           related_products?: string[] | null
           updated_at?: string | null
+          updated_by?: string | null
           usage_count?: number | null
           video_urls?: string[] | null
         }
@@ -533,6 +539,8 @@ export type Database = {
           answer?: string
           category?: string | null
           created_at?: string | null
+          created_by?: string | null
+          edited_at?: string | null
           helpful_count?: number | null
           id?: string
           image_urls?: string[] | null
@@ -543,6 +551,7 @@ export type Database = {
           question?: string
           related_products?: string[] | null
           updated_at?: string | null
+          updated_by?: string | null
           usage_count?: number | null
           video_urls?: string[] | null
         }
