@@ -26,14 +26,14 @@ import { format } from "date-fns";
 const Dashboard = () => {
   const getTodayStart = () => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
+    const utc = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+    return utc;
   };
 
   const getTodayEnd = () => {
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    return today;
+    const utc = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999));
+    return utc;
   };
 
   const [dateRange, setDateRange] = useState({
