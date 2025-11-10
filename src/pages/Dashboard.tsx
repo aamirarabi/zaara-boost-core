@@ -437,149 +437,197 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* New Widgets Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <RealTimeChatAnalytics />
-            <LatestReviewsWidget />
-          </div>
-
-          {/* Key Metrics Cards */}
-          {!isLoading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              <MetricCard
-                title="Orders"
-                value={stats.orders}
-                change={23}
-                icon={ShoppingCart}
-                details={[
-                  { label: "Received", value: Math.floor(stats.orders * 0.4) },
-                  { label: "Fulfilled", value: Math.floor(stats.orders * 0.57) },
-                  { label: "Pending", value: Math.floor(stats.orders * 0.03) },
-                ]}
-                footer={`Revenue: ₨${Math.floor(stats.revenue).toLocaleString()}`}
-                index={0}
-              />
-            <MetricCard
-              title="WhatsApp"
-              value={stats.messages}
-              change={15}
-              icon={MessageSquare}
-              details={[
-                { label: "New Users", value: Math.floor(stats.messages * 0.26) },
-                { label: "Returning", value: Math.floor(stats.messages * 0.74) },
-                { label: "Converted", value: Math.floor(stats.messages * 0.38) },
-              ]}
-              footer="Avg Response: 2.4s"
-              index={1}
-            />
-            <MetricCard
-              title="API Costs"
-              value={`₨${Math.floor(stats.apiCosts)}`}
-              change={-12}
-              icon={DollarSign}
-              details={[
-                { label: "OpenAI", value: `₨${Math.floor(stats.apiCosts * 0.81)}` },
-                { label: "WhatsApp", value: `₨${Math.floor(stats.apiCosts * 0.19)}` },
-              ]}
-              footer="Budget: 47%"
-              index={2}
-            />
-            <MetricCard
-              title="CS Team"
-              value={34}
-              change={8}
-              icon={Users}
-              details={[
-                { label: "Manual", value: 34 },
-                { label: "Escalations", value: 12 },
-                { label: "Avg Time", value: "5.2m" },
-              ]}
-              footer="Top: Fahad (12)"
-              index={3}
-            />
-            <MetricCard
-              title="Delivery"
-              value="84%"
-              icon={Truck}
-              details={[
-                { label: "PostEx", value: "84%" },
-                { label: "Leopards", value: "78%" },
-              ]}
-              footer="Avg Delay: 1.5 days"
-              index={4}
-            />
-            <MetricCard
-              title="FAQ Gaps"
-              value={faqGaps.length}
-              icon={MessageSquare}
-              details={[
-                { label: "Pending", value: faqGaps.length },
-                { label: "Added", value: 8 },
-              ]}
-              footer={faqGaps[0] ? `Top: "${faqGaps[0].question.slice(0, 15)}..." ${faqGaps[0].frequency}x` : "No gaps"}
-              index={5}
-            />
-          </div>
-          )}
-
-          {/* Charts Row */}
-          {!isLoading && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <OrdersChart data={orderTimeline} />
-              <OrderStatusChart data={orderStatusData} total={stats.orders} />
+          {/* New Widgets Row - Real-time Data */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+              Live Monitoring
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <RealTimeChatAnalytics />
+              <LatestReviewsWidget />
             </div>
-          )}
+          </div>
 
-          {/* Top Products Table */}
-          {!isLoading && topProducts.length > 0 && <TopProductsTable products={topProducts} />}
+          {/* Key Business Metrics - Priority Order */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Key Performance Indicators</h2>
+            {!isLoading && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Top Priority: Orders & Revenue */}
+                <MetricCard
+                  title="Orders"
+                  value={stats.orders}
+                  change={23}
+                  icon={ShoppingCart}
+                  details={[
+                    { label: "Received", value: Math.floor(stats.orders * 0.4) },
+                    { label: "Fulfilled", value: Math.floor(stats.orders * 0.57) },
+                    { label: "Pending", value: Math.floor(stats.orders * 0.03) },
+                  ]}
+                  footer={`Revenue: ₨${Math.floor(stats.revenue).toLocaleString()}`}
+                  index={0}
+                />
+                <MetricCard
+                  title="WhatsApp"
+                  value={stats.messages}
+                  change={15}
+                  icon={MessageSquare}
+                  details={[
+                    { label: "New Users", value: Math.floor(stats.messages * 0.26) },
+                    { label: "Returning", value: Math.floor(stats.messages * 0.74) },
+                    { label: "Converted", value: Math.floor(stats.messages * 0.38) },
+                  ]}
+                  footer="Avg Response: 2.4s"
+                  index={1}
+                />
+                
+                <MetricCard
+                  title="CS Team"
+                  value={34}
+                  change={8}
+                  icon={Users}
+                  details={[
+                    { label: "Manual", value: 34 },
+                    { label: "Escalations", value: 12 },
+                    { label: "Avg Time", value: "5.2m" },
+                  ]}
+                  footer="Top: Fahad (12)"
+                  index={2}
+                />
+                
+                <MetricCard
+                  title="Delivery"
+                  value="84%"
+                  icon={Truck}
+                  details={[
+                    { label: "PostEx", value: "84%" },
+                    { label: "Leopards", value: "78%" },
+                  ]}
+                  footer="Avg Delay: 1.5 days"
+                  index={3}
+                />
+              </div>
+            )}
+          </div>
 
-          {/* NEW: Product Complaints */}
-          <ProductComplaints complaints={sampleComplaints} />
+          {/* Secondary Metrics */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Additional Metrics</h2>
+            {!isLoading && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <MetricCard
+                  title="Total Customers"
+                  value={stats.customers}
+                  icon={Users}
+                  details={[
+                    { label: "Products", value: stats.products },
+                  ]}
+                  index={4}
+                />
+                <MetricCard
+                  title="API Costs"
+                  value={`₨${Math.floor(stats.apiCosts)}`}
+                  change={-12}
+                  icon={DollarSign}
+                  details={[
+                    { label: "OpenAI", value: `₨${Math.floor(stats.apiCosts * 0.81)}` },
+                    { label: "WhatsApp", value: `₨${Math.floor(stats.apiCosts * 0.19)}` },
+                  ]}
+                  footer="Budget: 47%"
+                  index={5}
+                />
+                
+                <MetricCard
+                  title="FAQ Gaps"
+                  value={faqGaps.length}
+                  icon={MessageSquare}
+                  details={[
+                    { label: "Pending", value: faqGaps.length },
+                    { label: "Added", value: 8 },
+                  ]}
+                  footer={faqGaps[0] ? `Top: "${faqGaps[0].question.slice(0, 15)}..." ${faqGaps[0].frequency}x` : "No gaps"}
+                  index={6}
+                />
+              </div>
+            )}
+          </div>
 
-          {/* NEW: Inventory Alerts */}
-          <InventoryAlerts {...inventoryData} />
+          {/* Orders Analytics */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Orders Analytics</h2>
+            {!isLoading && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <OrdersChart data={orderTimeline} />
+                <OrderStatusChart data={orderStatusData} total={stats.orders} />
+              </div>
+            )}
+          </div>
 
-          {/* NEW: Revenue Trends */}
-          <RevenueTrends {...revenueTrendsData} />
+          {/* Product Performance */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Product Performance</h2>
+            {!isLoading && topProducts.length > 0 && <TopProductsTable products={topProducts} />}
+            {!isLoading && <ProductComplaints complaints={sampleComplaints} />}
+          </div>
 
-          {/* NEW: Customer Sentiment */}
-          <CustomerSentiment data={sentimentData} />
+          {/* Operational Metrics */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Delivery & Logistics</h2>
+            {!isLoading && courierStats.length > 0 && <CourierPerformance couriers={courierStats} />}
+          </div>
 
-          {/* NEW: Peak Hours */}
-          <PeakHours {...peakHoursData} />
+          {/* Customer Insights */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Customer Insights</h2>
+            <div className="space-y-6">
+              <CustomerSentiment data={sentimentData} />
+            </div>
+          </div>
 
-          {/* Courier Performance */}
-          {!isLoading && courierStats.length > 0 && <CourierPerformance couriers={courierStats} />}
+          {/* Business Intelligence */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Business Intelligence</h2>
+            <div className="grid grid-cols-1 gap-6">
+              <RevenueTrends {...revenueTrendsData} />
+              <PeakHours {...peakHoursData} />
+              <InventoryAlerts {...inventoryData} />
+            </div>
+          </div>
 
-          {/* NEW: Warranty & Returns */}
-          <WarrantyReturns 
-            warrantyClaims={12}
-            warrantyChange={15}
-            returns={8}
-            returnsChange={-20}
-            refunds={45600}
-            refundsChange={-10}
-            topReturns={[
-              { product: "Beat Wireless ANC - Black", returns: 3, rate: 8.1, reason: "Defective" },
-              { product: "Boost Surge Pro Chair", returns: 2, rate: 2.1, reason: "Size issue" },
-              { product: "Boost Hawk Earbuds", returns: 2, rate: 20, reason: "Not as described" },
-            ]}
-            returnReasons={[
-              { name: "Defective", value: 45, color: "hsl(var(--danger))" },
-              { name: "Not as Described", value: 30, color: "hsl(var(--warning))" },
-              { name: "Size/Fit", value: 15, color: "hsl(var(--info))" },
-              { name: "Changed Mind", value: 10, color: "hsl(var(--muted))" },
-            ]}
-          />
-
-          {/* FAQ Gap Analysis */}
-          {!isLoading && faqGaps.length > 0 && (
-            <FAQGapAnalysis 
-              gaps={faqGaps} 
-              onAdd={handleFAQAdd}
-              onIgnore={handleFAQIgnore}
-            />
-          )}
+          {/* Operations Management */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Operations Management</h2>
+            <div className="space-y-6">
+              <WarrantyReturns
+                warrantyClaims={12}
+                warrantyChange={15}
+                returns={8}
+                returnsChange={-20}
+                refunds={45600}
+                refundsChange={-10}
+                topReturns={[
+                  { product: "Beat Wireless ANC - Black", returns: 3, rate: 8.1, reason: "Defective" },
+                  { product: "Boost Surge Pro Chair", returns: 2, rate: 2.1, reason: "Size issue" },
+                  { product: "Boost Hawk Earbuds", returns: 2, rate: 20, reason: "Not as described" },
+                ]}
+                returnReasons={[
+                  { name: "Defective", value: 45, color: "hsl(var(--danger))" },
+                  { name: "Not as Described", value: 30, color: "hsl(var(--warning))" },
+                  { name: "Size/Fit", value: 15, color: "hsl(var(--info))" },
+                  { name: "Changed Mind", value: 10, color: "hsl(var(--muted))" },
+                ]}
+              />
+              
+              {!isLoading && faqGaps.length > 0 && (
+                <FAQGapAnalysis 
+                  gaps={faqGaps} 
+                  onAdd={handleFAQAdd}
+                  onIgnore={handleFAQIgnore}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </Layout>
