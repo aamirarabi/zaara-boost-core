@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2 } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2, Truck, AlertCircle } from "lucide-react";
 import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -17,8 +17,10 @@ const Orders = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [courierFilter, setCourierFilter] = useState("all");
   const [syncing, setSyncing] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [courierStats, setCourierStats] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalOrders: 0,
     pendingOrders: 0,
@@ -29,7 +31,8 @@ const Orders = () => {
   useEffect(() => {
     loadOrders();
     loadStats();
-  }, [statusFilter]);
+    loadCourierStats();
+  }, [statusFilter, courierFilter]);
 
   const loadStats = async () => {
     // Get total orders
@@ -77,9 +80,62 @@ const Orders = () => {
     if (sourceFilter !== "all") {
       query = query.eq("order_source", sourceFilter);
     }
+    
+    if (courierFilter !== "all") {
+      query = query.eq("courier_name", courierFilter);
+    }
 
     const { data } = await query;
     if (data) setOrders(data);
+  };
+
+  const loadCourierStats = async () => {
+    const { data: courierData } = await supabase
+      .from("shopify_orders")
+      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status")
+      .not("courier_name", "is", null);
+
+    if (!courierData) return;
+
+    const statsMap: any = {};
+    courierData.forEach((order) => {
+      const courier = order.courier_name;
+      if (!statsMap[courier]) {
+        statsMap[courier] = {
+          name: courier,
+          total: 0,
+          onTime: 0,
+          early: 0,
+          late: 0,
+          totalDelayDays: 0,
+        };
+      }
+      
+      statsMap[courier].total++;
+      
+      if (order.actual_delivery_date && order.estimated_delivery_date) {
+        const actual = new Date(order.actual_delivery_date);
+        const estimated = new Date(order.estimated_delivery_date);
+        const diffDays = Math.ceil((actual.getTime() - estimated.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) {
+          statsMap[courier].early++;
+        } else if (diffDays === 0) {
+          statsMap[courier].onTime++;
+        } else {
+          statsMap[courier].late++;
+          statsMap[courier].totalDelayDays += diffDays;
+        }
+      }
+    });
+
+    const statsArray = Object.values(statsMap).map((stat: any) => ({
+      ...stat,
+      onTimeRate: stat.total > 0 ? Math.round(((stat.onTime + stat.early) / stat.total) * 100) : 0,
+      avgDelay: stat.late > 0 ? (stat.totalDelayDays / stat.late).toFixed(1) : 0,
+    }));
+
+    setCourierStats(statsArray);
   };
 
   const syncOrders = async () => {
@@ -104,9 +160,45 @@ const Orders = () => {
       });
       loadOrders();
       loadStats();
+      loadCourierStats();
     }
 
     setSyncing(false);
+  };
+
+  const getCourierBadge = (courier: string | null) => {
+    if (!courier) return { icon: "📮", color: "bg-gray-100 text-gray-800", text: "Not Assigned" };
+    
+    const courierMap: any = {
+      "PostEx": { icon: "📦", color: "bg-blue-100 text-blue-800" },
+      "Leopards": { icon: "🐆", color: "bg-orange-100 text-orange-800" },
+      "TCS": { icon: "🚚", color: "bg-purple-100 text-purple-800" },
+      "BlueEx": { icon: "🔵", color: "bg-sky-100 text-sky-800" },
+      "Rider": { icon: "🏍️", color: "bg-green-100 text-green-800" },
+    };
+    
+    return courierMap[courier] || { icon: "📮", color: "bg-gray-100 text-gray-800", text: courier };
+  };
+
+  const getDeliveryPerformance = (order: any) => {
+    if (!order.actual_delivery_date || !order.estimated_delivery_date) {
+      if (order.fulfillment_status === "fulfilled") {
+        return { text: "In Transit", color: "bg-yellow-100 text-yellow-800", days: null };
+      }
+      return { text: "Pending", color: "bg-gray-100 text-gray-800", days: null };
+    }
+
+    const actual = new Date(order.actual_delivery_date);
+    const estimated = new Date(order.estimated_delivery_date);
+    const diffDays = Math.ceil((actual.getTime() - estimated.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return { text: `⚡ Early (${Math.abs(diffDays)}d)`, color: "bg-green-100 text-green-800", days: diffDays };
+    } else if (diffDays === 0) {
+      return { text: "✓ On-time", color: "bg-green-100 text-green-800", days: 0 };
+    } else {
+      return { text: `⏰ Delayed (+${diffDays}d)`, color: "bg-red-100 text-red-800", days: diffDays };
+    }
   };
 
   const filteredOrders = orders.filter(
@@ -216,6 +308,56 @@ const Orders = () => {
           </Card>
         </div>
 
+        {/* Courier Performance Cards */}
+        {courierStats.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold mb-3">Courier Performance</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {courierStats.map((courier) => (
+                <Card key={courier.name}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <span className="text-2xl">{getCourierBadge(courier.name).icon}</span>
+                      {courier.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total Orders:</span>
+                      <span className="font-semibold">{courier.total}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">On-Time Rate:</span>
+                      <span className={`font-semibold ${courier.onTimeRate >= 80 ? 'text-green-600' : courier.onTimeRate >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        {courier.onTimeRate}%
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t">
+                      <div className="text-center">
+                        <div className="text-green-600 font-semibold">{courier.early}</div>
+                        <div className="text-muted-foreground">Early</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-blue-600 font-semibold">{courier.onTime}</div>
+                        <div className="text-muted-foreground">On-time</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-red-600 font-semibold">{courier.late}</div>
+                        <div className="text-muted-foreground">Late</div>
+                      </div>
+                    </div>
+                    {courier.late > 0 && (
+                      <div className="text-xs text-muted-foreground pt-2">
+                        Avg Delay: {courier.avgDelay} days
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
         {orders.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
@@ -263,6 +405,19 @@ const Orders = () => {
                   <SelectItem value="Organic">Organic</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={courierFilter} onValueChange={setCourierFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All Couriers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Couriers</SelectItem>
+                  {courierStats.map((courier) => (
+                    <SelectItem key={courier.name} value={courier.name}>
+                      {courier.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
           <CardContent>
@@ -271,21 +426,24 @@ const Orders = () => {
                 <TableRow>
                   <TableHead>Order #</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Courier</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Delivery</TableHead>
+                  <TableHead>Performance</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => {
-                  // line_items is already a JSONB object, no need to parse
                   const items = Array.isArray(order.line_items) ? order.line_items : [];
                   const itemsText = items.map((item: any) => 
                     `${item.quantity}x ${item.name}`
                   ).join(', ');
+                  
+                  const courierBadge = getCourierBadge(order.courier_name);
+                  const performance = getDeliveryPerformance(order);
                   
                   return (
                     <TableRow 
@@ -299,6 +457,11 @@ const Orders = () => {
                           <div className="font-medium">{order.customer_name || "—"}</div>
                           <div className="text-sm text-muted-foreground">{order.customer_phone || "—"}</div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={courierBadge.color}>
+                          {courierBadge.icon} {courierBadge.text || order.courier_name}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="max-w-xs truncate" title={itemsText}>
@@ -317,18 +480,14 @@ const Orders = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          {order.delivery_status && (
-                            <Badge className={getDeliveryStatusColor(order.delivery_status)}>
-                              {order.delivery_status}
-                            </Badge>
-                          )}
-                          {order.estimated_delivery_date && (
-                            <div className="text-xs text-muted-foreground">
-                              Est: {new Date(order.estimated_delivery_date).toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
+                        <Badge className={performance.color}>
+                          {performance.text}
+                        </Badge>
+                        {order.estimated_delivery_date && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Est: {new Date(order.estimated_delivery_date).toLocaleDateString()}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {formatPakistanDate(order.created_at)}
