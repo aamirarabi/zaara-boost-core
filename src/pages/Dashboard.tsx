@@ -58,18 +58,21 @@ const Dashboard = () => {
   const [faqGaps, setFaqGaps] = useState<any[]>([]);
 
   useEffect(() => {
+    console.log('🔄 Date range changed, loading stats...', dateRange.label);
     loadStats();
-  }, [dateRange]);
+  }, [dateRange.label, dateRange.start.getTime(), dateRange.end.getTime()]);
+
 
   const loadStats = async () => {
-    console.log('🔄 Loading stats for date range:', {
-      start: dateRange.start.toISOString(),
-      end: dateRange.end.toISOString(),
-      label: dateRange.label
-    });
+    try {
+      console.log('📅 Loading stats for:', {
+        label: dateRange.label,
+        start: dateRange.start.toISOString(),
+        end: dateRange.end.toISOString()
+      });
 
-    // Get counts
-    const [customers, productsCount, orders, messages] = await Promise.all([
+      // Get counts
+      const [customers, productsCount, orders, messages] = await Promise.all([
       supabase.from("customers").select("*", { count: "exact", head: true }),
       supabase.from("shopify_products").select("*", { count: "exact", head: true }),
       supabase.from("shopify_orders")
@@ -254,7 +257,12 @@ const Dashboard = () => {
         lastAsked: new Date(gap.last_asked),
       })) || []
     );
-  };
+
+    console.log('✅ All stats loaded successfully');
+  } catch (error) {
+    console.error('❌ Error loading stats:', error);
+  }
+};
 
   const handleFAQAdd = async (id: string) => {
     await supabase

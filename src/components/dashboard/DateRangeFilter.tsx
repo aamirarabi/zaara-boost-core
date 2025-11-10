@@ -67,7 +67,10 @@ export const DateRangeFilter = ({ selectedRange, onRangeChange }: DateRangeFilte
             key={range.label}
             variant={selectedRange.label === range.label ? "default" : "outline"}
             size="sm"
-            onClick={() => onRangeChange(range)}
+            onClick={() => {
+              console.log('📆 Date range selected:', range.label, range.start.toISOString(), range.end.toISOString());
+              onRangeChange(range);
+            }}
             className={selectedRange.label === range.label ? "bg-warning text-black hover:bg-warning/90" : ""}
           >
             {range.label}
