@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_performance: {
+        Row: {
+          agent_name: string
+          created_at: string | null
+          customer_rating: number | null
+          first_contact_resolution: boolean | null
+          id: string
+          message_id: string | null
+          response_time_seconds: number | null
+        }
+        Insert: {
+          agent_name: string
+          created_at?: string | null
+          customer_rating?: number | null
+          first_contact_resolution?: boolean | null
+          id?: string
+          message_id?: string | null
+          response_time_seconds?: number | null
+        }
+        Update: {
+          agent_name?: string
+          created_at?: string | null
+          customer_rating?: number | null
+          first_contact_resolution?: boolean | null
+          id?: string
+          message_id?: string | null
+          response_time_seconds?: number | null
+        }
+        Relationships: []
+      }
+      api_usage_logs: {
+        Row: {
+          api_name: string
+          api_type: string | null
+          conversation_id: string | null
+          cost_pkr: number | null
+          created_at: string | null
+          id: string
+          timestamp: string
+          tokens_used: number | null
+        }
+        Insert: {
+          api_name: string
+          api_type?: string | null
+          conversation_id?: string | null
+          cost_pkr?: number | null
+          created_at?: string | null
+          id?: string
+          timestamp: string
+          tokens_used?: number | null
+        }
+        Update: {
+          api_name?: string
+          api_type?: string | null
+          conversation_id?: string | null
+          cost_pkr?: number | null
+          created_at?: string | null
+          id?: string
+          timestamp?: string
+          tokens_used?: number | null
+        }
+        Relationships: []
+      }
       chat_history: {
         Row: {
           content: string | null
@@ -139,6 +202,51 @@ export type Database = {
           taken_over_at?: string | null
           taken_over_by?: string | null
           thread_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      courier_performance: {
+        Row: {
+          actual_delivery_date: string | null
+          courier_name: string
+          created_at: string | null
+          customer_city: string | null
+          delay_days: number | null
+          delivery_status: string | null
+          expected_delivery_date: string | null
+          id: string
+          order_id: string
+          shipped_date: string | null
+          tracking_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          actual_delivery_date?: string | null
+          courier_name: string
+          created_at?: string | null
+          customer_city?: string | null
+          delay_days?: number | null
+          delivery_status?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          order_id: string
+          shipped_date?: string | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          actual_delivery_date?: string | null
+          courier_name?: string
+          created_at?: string | null
+          customer_city?: string | null
+          delay_days?: number | null
+          delivery_status?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          order_id?: string
+          shipped_date?: string | null
+          tracking_number?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -290,6 +398,69 @@ export type Database = {
           total_orders?: number | null
           total_spend?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      dashboard_preferences: {
+        Row: {
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_id: string | null
+          visible_sections: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+          visible_sections?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+          visible_sections?: Json | null
+        }
+        Relationships: []
+      }
+      faq_gaps: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          customer_phones: string[] | null
+          first_asked: string
+          frequency: number | null
+          id: string
+          last_asked: string
+          question: string
+          status: string | null
+          suggested_answer: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          customer_phones?: string[] | null
+          first_asked: string
+          frequency?: number | null
+          id?: string
+          last_asked: string
+          question: string
+          status?: string | null
+          suggested_answer?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          customer_phones?: string[] | null
+          first_asked?: string
+          frequency?: number | null
+          id?: string
+          last_asked?: string
+          question?: string
+          status?: string | null
+          suggested_answer?: string | null
         }
         Relationships: []
       }
