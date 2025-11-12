@@ -54,7 +54,24 @@ const Inbox = () => {
 
     if (data) {
       const uniquePhones = Array.from(new Map(data.map((item) => [item.phone_number, item])).values());
-      setConversations(uniquePhones);
+      
+      // Fetch customer names
+      const conversationsWithNames = await Promise.all(
+        uniquePhones.map(async (conv) => {
+          const { data: contextData } = await supabase
+            .from("conversation_context")
+            .select("customer_name")
+            .eq("phone_number", conv.phone_number)
+            .maybeSingle();
+          
+          return {
+            ...conv,
+            customer_name: contextData?.customer_name || null
+          };
+        })
+      );
+      
+      setConversations(conversationsWithNames);
     }
   };
 
@@ -153,9 +170,9 @@ const Inbox = () => {
                       <AvatarFallback>{conv.phone_number.slice(-2)}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 overflow-hidden cursor-pointer" onClick={() => handleSelectConversation(conv.phone_number)}>
-                      <p className="font-medium truncate">{conv.phone_number}</p>
+                      <p className="font-medium truncate">{conv.customer_name || conv.phone_number}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(conv.created_at).toLocaleTimeString()}
+                        {conv.customer_name ? conv.phone_number : new Date(conv.created_at).toLocaleTimeString()}
                       </p>
                     </div>
                     <Button
@@ -180,7 +197,14 @@ const Inbox = () => {
             {selectedPhone ? (
               <>
                 <div className="p-4 border-b flex justify-between items-center">
-                  <h2 className="font-semibold">{selectedPhone}</h2>
+                  <div>
+                    <h2 className="font-semibold">
+                      {conversations.find(c => c.phone_number === selectedPhone)?.customer_name || selectedPhone}
+                    </h2>
+                    {conversations.find(c => c.phone_number === selectedPhone)?.customer_name && (
+                      <p className="text-xs text-muted-foreground">{selectedPhone}</p>
+                    )}
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
