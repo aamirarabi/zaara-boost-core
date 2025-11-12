@@ -593,7 +593,7 @@ async function formatProductDetails(product: any, phone_number: string, supabase
   // Key Features
   if (product.description) {
     formatted += `✨ *Key Features:*\n`;
-    const features = product.description
+    const features = cleanHtmlForWhatsApp(product.description)
       .split(/[•\n]/)
       .filter((f: string) => f.trim().length > 10)
       .slice(0, 5)
@@ -1124,9 +1124,9 @@ User query: ${message}`
               .eq("status", "active")
               .limit(1);
             
-            // If exact match found and query looks specific (>2 words), return only that product
+            // If exact match found and query looks specific (>2 words OR contains product name), return only that product
             const queryWords = originalQuery.split(/\s+/).length;
-            if (exactMatch && exactMatch.length > 0 && queryWords >= 2) {
+            if (exactMatch && exactMatch.length > 0 && (queryWords >= 2 || containsProductName)) {
               console.log(`✅ Found exact match: ${exactMatch[0].title}`);
               
               // Set as single product in context
