@@ -13,6 +13,7 @@ const AIManagement = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [lastUploadTime, setLastUploadTime] = useState<string | null>(null);
 
   const defaultPrompt = `## ROLE & PERSONALITY
 
@@ -412,6 +413,17 @@ How can I assist you today?"
       if (error) throw error;
       
       setSystemPrompt(data?.setting_value || defaultPrompt);
+
+      // Load last upload timestamp
+      const { data: uploadData } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "zaara_last_upload_time")
+        .maybeSingle();
+
+      if (uploadData?.setting_value) {
+        setLastUploadTime(uploadData.setting_value);
+      }
     } catch (error) {
       console.error("Error loading prompt:", error);
       setSystemPrompt(defaultPrompt);
@@ -451,10 +463,14 @@ How can I assist you today?"
       // First save to database
       await savePrompt();
       
-      // Then upload to OpenAI
+      // Add timestamp to the prompt
+      const timestamp = new Date().toISOString();
+      const timestampedPrompt = `[Last Updated: ${timestamp}]\n\n${systemPrompt}`;
+      
+      // Then upload to OpenAI with timestamp
       const { data, error } = await supabase.functions.invoke("update-openai-assistant", {
         body: { 
-          instructions: systemPrompt,
+          instructions: timestampedPrompt,
           assistant_id: "asst_XD1YQeyvtzWlBK1Fa0HNX9fZ"
         }
       });
@@ -462,7 +478,19 @@ How can I assist you today?"
       if (error) throw error;
       
       if (data?.success) {
-        toast.success("✅ Prompt uploaded to OpenAI Assistant successfully!");
+        // Save upload timestamp
+        await supabase
+          .from("system_settings")
+          .upsert({
+            setting_key: "zaara_last_upload_time",
+            setting_value: timestamp,
+            description: "Last time Zaara prompt was uploaded to OpenAI"
+          }, {
+            onConflict: "setting_key"
+          });
+        
+        setLastUploadTime(timestamp);
+        toast.success(`✅ Prompt uploaded to OpenAI at ${new Date(timestamp).toLocaleString()}`);
       } else {
         throw new Error(data?.error || "Upload failed");
       }
@@ -494,6 +522,11 @@ How can I assist you today?"
                   <CardDescription>
                     Controls how Zaara behaves, greets customers, and handles all interactions
                   </CardDescription>
+                  {lastUploadTime && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Last uploaded to OpenAI: <span className="font-medium">{new Date(lastUploadTime).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={savePrompt} disabled={saving || loading} variant="outline">
