@@ -426,8 +426,59 @@ async function getPostExTracking(supabase: any, trackingNumber: string): Promise
   }
 }
 
-// Helper function to clean HTML for WhatsApp
-function cleanHtmlForWhatsApp(html: string): string {
+  // FIX #2: Keyword expansion for better product matching
+  function expandSearchKeywords(searchTerm: string): string {
+    const term = searchTerm.toLowerCase().trim();
+    
+    const mappings: { [key: string]: string } = {
+      'beat': 'beat wireless anc headset',
+      'beat headphones': 'beat wireless anc headset',
+      'beat headphone': 'beat wireless anc headset',
+      'sync': 'sync wireless anc headset',
+      'sync headphones': 'sync wireless anc headset',
+      'sync headphone': 'sync wireless anc headset',
+      'wave': 'wave wireless anc headset',
+      'wave headphones': 'wave wireless anc headset',
+      'wave headphone': 'wave wireless anc headset',
+      'reverb': 'reverb wireless anc headset',
+      'reverb headphones': 'reverb wireless anc headset',
+      'pulse': 'pulse wireless anc headset',
+      'pulse headphones': 'pulse wireless anc headset',
+      'headphones': 'headset',
+      'headphone': 'headset',
+      'surge pro': 'surge pro',
+      'impulse': 'impulse gaming chair',
+      'synergy': 'synergy gaming chair',
+      'throne': 'throne gaming chair',
+      'apex': 'apex gaming chair',
+      'chair': 'gaming chair',
+      'chairs': 'gaming chair',
+      'astro': 'astro smart watch',
+      'smart watch': 'smart watch',
+      'smartwatch': 'smart watch',
+      'watch': 'smart watch',
+      'watches': 'smart watch',
+    };
+    
+    // Check for exact matches first
+    if (mappings[term]) {
+      console.log(`✅ Keyword mapping: "${term}" → "${mappings[term]}"`);
+      return mappings[term];
+    }
+    
+    // Check for partial matches
+    for (const [key, value] of Object.entries(mappings)) {
+      if (term.includes(key)) {
+        console.log(`✅ Partial keyword mapping: "${term}" → "${value}"`);
+        return value;
+      }
+    }
+    
+    return term;
+  }
+
+  // Helper function to clean HTML for WhatsApp
+  function cleanHtmlForWhatsApp(html: string): string {
   if (!html) return "";
   
   let clean = html;
@@ -1172,17 +1223,21 @@ User query: ${message}`
                 }]
               });
             } else {
-              // Use limit from args, default to 20 to show ALL products
-              const limit = args.limit || 20;
-              
-              // BUG FIX #5: Only show ACTIVE products (status='active')
-              const { data: products, error: searchError } = await supabase
-                .from("shopify_products")
-                .select("*")
-                .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}},product_type.ilike.%${searchTerm}%`)
-                .eq("status", "active")  // ✅ Only active products
-                .order("price", { ascending: true })
-                .limit(limit);
+            // FIX #1: Increase limit to 100 to show ALL products
+            const limit = args.limit || 100;
+            
+            // FIX #2: Expand keywords for better matching
+            const expandedTerm = expandSearchKeywords(searchTerm);
+            console.log(`🔄 Expanded search term from "${searchTerm}" to "${expandedTerm}"`);
+            
+            // FIX #3: Only show ACTIVE products (status='active')
+            const { data: products, error: searchError } = await supabase
+              .from("shopify_products")
+              .select("*")
+              .or(`title.ilike.%${expandedTerm}%,description.ilike.%${expandedTerm}%,tags.cs.{${expandedTerm}},product_type.ilike.%${expandedTerm}%`)
+              .eq("status", "active")  // ✅ Only active products
+              .order("price", { ascending: true })  // ✅ Price ascending
+              .limit(limit);
               
               if (searchError || !products || products.length === 0) {
                 output = JSON.stringify({ 
