@@ -1216,12 +1216,12 @@ User query: ${message}`
                     .select("rating")
                     .eq("shopify_product_id", product.shopify_id);
 
-                  // Get top 5 reviews for display
+                  // Get top 5-star reviews only for display
                   const { data: topReviews } = await supabase
                     .from("product_reviews")
                     .select("rating, title, body, reviewer_name, reviewer_location, verified_buyer, pictures, created_at_judgeme")
                     .eq("shopify_product_id", product.shopify_id)
-                    .order("rating", { ascending: false })
+                    .eq("rating", 5)
                     .order("created_at_judgeme", { ascending: false })
                     .limit(5);
 
@@ -1289,12 +1289,12 @@ User query: ${message}`
             if (product) {
               console.log("📦 Fetching product details for:", product.title);
               
-              // Fetch TOP 5 reviews for display (sorted by rating and date)
+              // Fetch TOP 5-star reviews only for display
               const { data: reviews, error: reviewsError } = await supabase
                 .from("product_reviews")
                 .select("rating, title, body, reviewer_name, reviewer_location, verified_buyer, pictures, created_at_judgeme")
                 .eq("shopify_product_id", product.shopify_id)
-                .order("rating", { ascending: false })
+                .eq("rating", 5)
                 .order("created_at_judgeme", { ascending: false })
                 .limit(5);
 
