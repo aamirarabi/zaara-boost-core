@@ -1344,14 +1344,14 @@ User query: ${message}`
             if (product) {
               console.log("📦 Fetching product details for:", product.title);
               
-              // Fetch TOP 5-star reviews only for display
+              // FIX #1: Fetch TOP 5-star reviews only for display
               const { data: reviews, error: reviewsError } = await supabase
                 .from("product_reviews")
                 .select("rating, title, body, reviewer_name, reviewer_location, verified_buyer, pictures, created_at_judgeme")
                 .eq("shopify_product_id", product.shopify_id)
-                .eq("rating", 5)
+                .eq("rating", 5)  // ✅ ONLY 5-STAR REVIEWS
                 .order("created_at_judgeme", { ascending: false })
-                .limit(5);
+                .limit(3);  // Show top 3 five-star reviews
 
               if (reviewsError) {
                 console.error("❌ Reviews query error:", reviewsError);
@@ -1442,10 +1442,16 @@ User query: ${message}`
               const variants = JSON.parse(product.variants || "[]");
               const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
               
+              // FIX #3: Calculate original and current prices
+              const originalPrice = product.compare_at_price || product.price;
+              const currentPrice = product.price;
+              
               output = JSON.stringify({
                 found: true,
                 title: product.title,
-                price: product.price,
+                price: currentPrice,
+                original_price: originalPrice,  // ✅ ADD
+                current_price: currentPrice,     // ✅ ADD
                 description: cleanHtmlForWhatsApp(product.description || ""),
                 image_url: firstImage,
                 product_handle: product.handle,
@@ -1458,7 +1464,13 @@ User query: ${message}`
                 all_videos: videoUrl ? [videoUrl, ...faqVideos] : faqVideos,
                 average_rating: average_rating,
                 review_count: review_count,
-                reviews: reviews || [],
+                // FIX #2: Map reviews to include city field explicitly
+                reviews: (reviews || []).map(r => ({
+                  rating: 5,
+                  text: r.body || r.title || "",
+                  reviewer: r.reviewer_name || "Anonymous",
+                  city: r.reviewer_location || "Pakistan"  // ✅ ADD CITY
+                })),
                 inventory: product.inventory,
                 tags: product.tags || ""
               });
