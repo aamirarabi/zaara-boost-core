@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.sync-judgeme-reviews]
 verify_jwt = false
+
+[functions.update-zaara-assistant]
+verify_jwt = false
