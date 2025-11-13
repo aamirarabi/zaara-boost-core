@@ -56,19 +56,32 @@ serve(async (req) => {
 
     console.log("Processing message:", { phoneNumber, messageText, messageType, messageId });
 
-    // Save message to chat_history
-    const { error: insertError } = await supabase.from("chat_history").insert({
-      phone_number: phoneNumber,
-      content: messageText,
-      direction: "inbound",
-      sent_by: "customer",
-      message_type: messageType,
-      whatsapp_message_id: messageId,
-      status: "received",
-    });
+    // Check if message already exists to prevent duplicates
+    const { data: existingMsg } = await supabase
+      .from("chat_history")
+      .select("id")
+      .eq("whatsapp_message_id", messageId)
+      .maybeSingle();
 
-    if (insertError) {
-      console.error("Error saving message:", insertError);
+    if (!existingMsg) {
+      // Save message to chat_history only if it doesn't exist
+      const { error: insertError } = await supabase.from("chat_history").insert({
+        phone_number: phoneNumber,
+        content: messageText,
+        direction: "inbound",
+        sent_by: "customer",
+        message_type: messageType,
+        whatsapp_message_id: messageId,
+        status: "received",
+      });
+
+      if (insertError) {
+        console.error("Error saving message:", insertError);
+      } else {
+        console.log("✅ Message saved to chat_history");
+      }
+    } else {
+      console.log("⏭️ Message already exists, skipping duplicate save");
     }
 
     // Invoke process-zaara-message edge function
