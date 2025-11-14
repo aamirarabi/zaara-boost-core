@@ -324,7 +324,9 @@ const FAQs = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">FAQs</h1>
-            <p className="text-muted-foreground">Manage frequently asked questions</p>
+            <p className="text-muted-foreground">
+              Manage frequently asked questions • {searchQuery ? `${filteredFAQs.length} of ${faqs.length}` : `${faqs.length} total`} FAQs
+            </p>
           </div>
           <div className="flex gap-2">
             <CreateFAQDialog onSuccess={async () => {
