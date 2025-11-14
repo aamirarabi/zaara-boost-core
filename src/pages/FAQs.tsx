@@ -6,14 +6,38 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Upload, Loader2 } from "lucide-react";
+import { Search, Upload, Loader2, Download, Trash2 } from "lucide-react";
 import { CreateFAQDialog } from "@/components/faq/CreateFAQDialog";
 import { format } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const FAQs = () => {
   const [faqs, setFaqs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
 
   useEffect(() => {
     loadFAQs();
@@ -36,6 +60,164 @@ const FAQs = () => {
     } catch (error) {
       console.error("Sync error:", error);
       toast.error("FAQ saved but sync to Vector Store failed");
+    }
+  };
+
+  const deleteAllFAQs = async () => {
+    setIsDeletingAll(true);
+    try {
+      // Delete all FAQs from database
+      const { error } = await supabase
+        .from('faq_vectors')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all rows
+
+      if (error) throw error;
+
+      // Sync to Vector Store (will clear it since no FAQs exist)
+      await syncToVectorStore();
+
+      toast.success("All FAQs deleted and synced to Vector Store");
+
+      // Refresh the FAQ list
+      loadFAQs();
+    } catch (error) {
+      console.error('Delete all error:', error);
+      toast.error("Failed to delete all FAQs");
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
+  const bulkImportFAQs = async () => {
+    if (!importFile) {
+      toast.error("Please select a JSON file to import");
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      // Read the file
+      const fileText = await importFile.text();
+      const faqData = JSON.parse(fileText);
+
+      // Validate format
+      if (!Array.isArray(faqData)) {
+        throw new Error("Invalid format: JSON must be an array of FAQs");
+      }
+
+      // Get current user for audit
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || "system@boost-lifestyle.co";
+
+      // Import each FAQ
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const faq of faqData) {
+        try {
+          const { error } = await supabase
+            .from('faq_vectors')
+            .insert({
+              id: faq.id || crypto.randomUUID(),
+              question: faq.question,
+              answer: faq.answer,
+              category: faq.category || 'General',
+              keywords: faq.keywords || faq.tags || [],
+              video_urls: faq.video_urls || [],
+              is_active: faq.is_active !== undefined ? faq.is_active : true,
+              created_by: userEmail,
+              updated_by: userEmail
+            });
+
+          if (error) {
+            console.error('Error importing FAQ:', faq.question, error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        } catch (err) {
+          console.error('Error processing FAQ:', err);
+          errorCount++;
+        }
+      }
+
+      // Sync to Vector Store after import
+      await syncToVectorStore();
+
+      toast.success(`Import complete: ${successCount} FAQs imported${errorCount > 0 ? `, ${errorCount} failed` : ''}`);
+
+      // Refresh the page
+      loadFAQs();
+    } catch (error) {
+      console.error('Bulk import error:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to import FAQs");
+    } finally {
+      setIsImporting(false);
+      setImportFile(null);
+    }
+  };
+
+  const exportFAQs = async () => {
+    try {
+      // Fetch all FAQs
+      const { data: faqs, error } = await supabase
+        .from('faq_vectors')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Format for export (remove system fields)
+      const exportData = faqs?.map(faq => ({
+        question: faq.question,
+        answer: faq.answer,
+        category: faq.category,
+        keywords: faq.keywords,
+        video_urls: faq.video_urls,
+        is_active: faq.is_active
+      }));
+
+      // Create JSON file
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `faqs-export-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${exportData?.length || 0} FAQs`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("Failed to export FAQs");
+    }
+  };
+
+  const deleteFAQ = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('faq_vectors')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Sync to Vector Store after delete
+      await syncToVectorStore();
+
+      toast.success("FAQ deleted and synced to Vector Store");
+
+      // Refresh the list
+      loadFAQs();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error("Failed to delete FAQ");
     }
   };
 
@@ -128,7 +310,68 @@ const FAQs = () => {
             <p className="text-muted-foreground">Manage frequently asked questions</p>
           </div>
           <div className="flex gap-2">
-            <CreateFAQDialog onSuccess={loadFAQs} />
+            <CreateFAQDialog onSuccess={async () => {
+              loadFAQs();
+              await syncToVectorStore();
+            }} />
+            
+            <Button variant="outline" onClick={exportFAQs}>
+              <Download className="mr-2 h-4 w-4" />
+              Export FAQs
+            </Button>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Bulk Import
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Bulk Import FAQs</DialogTitle>
+                  <DialogDescription>
+                    Upload a JSON file containing FAQs. Format should be an array of objects with:
+                    question, answer, category, keywords, video_urls, is_active
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid w-full max-w-sm items-center gap-1.5">
+                    <Label htmlFor="faq-file">FAQ JSON File</Label>
+                    <Input
+                      id="faq-file"
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-semibold">Expected JSON format:</p>
+                    <pre className="mt-2 rounded bg-muted p-2 text-xs overflow-x-auto">
+{`[
+  {
+    "question": "What is your warranty?",
+    "answer": "1 year warranty...",
+    "category": "Warranty",
+    "keywords": ["warranty", "policy"],
+    "video_urls": [],
+    "is_active": true
+  }
+]`}
+                    </pre>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    onClick={bulkImportFAQs}
+                    disabled={!importFile || isImporting}
+                  >
+                    {isImporting ? "Importing..." : "Import FAQs"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <input
               type="file"
               accept=".json"
@@ -152,6 +395,34 @@ const FAQs = () => {
                 )}
               </label>
             </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete All FAQs
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete ALL FAQs
+                    from the database and the OpenAI Vector Store.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={deleteAllFAQs}
+                    disabled={isDeletingAll}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isDeletingAll ? "Deleting..." : "Yes, Delete All"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
 
