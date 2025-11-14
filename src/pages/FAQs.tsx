@@ -97,14 +97,31 @@ const FAQs = () => {
 
     setIsImporting(true);
     try {
-      // Read the file
-      const fileText = await importFile.text();
-      const faqData = JSON.parse(fileText);
+    // Read the file
+    const fileText = await importFile.text();
+    let parsedData = JSON.parse(fileText);
 
-      // Validate format
-      if (!Array.isArray(faqData)) {
-        throw new Error("Invalid format: JSON must be an array of FAQs");
-      }
+    // Handle both formats:
+    // 1. Direct array: [{ question: "...", answer: "..." }, ...]
+    // 2. Object with faqs property: { store_name: "...", faqs: [...] }
+    let faqData;
+
+    if (Array.isArray(parsedData)) {
+      // Format 1: Direct array
+      faqData = parsedData;
+    } else if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.faqs)) {
+      // Format 2: Object with faqs array (OpenAI export format)
+      faqData = parsedData.faqs;
+    } else {
+      throw new Error("Invalid format: JSON must be either an array of FAQs or an object with a 'faqs' array property");
+    }
+
+    // Validate we have FAQs
+    if (!Array.isArray(faqData) || faqData.length === 0) {
+      throw new Error("No FAQs found in the file");
+    }
+
+    console.log(`📥 Importing ${faqData.length} FAQs...`);
 
       // Get current user for audit
       const { data: { user } } = await supabase.auth.getUser();
