@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.update-zaara-assistant]
 verify_jwt = false
+
+[functions.sync-faq-to-vector-store]
+verify_jwt = false
