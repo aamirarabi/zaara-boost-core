@@ -1,5 +1,5 @@
 import { Layout } from "@/components/Layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,41 @@ const AIManagement = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [lastUploadTime, setLastUploadTime] = useState<string | null>(null);
+  const [isUpdatingPrompt, setIsUpdatingPrompt] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+    setLoading(true);
+    try {
+      // Load the system prompt
+      const { data: promptData } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "zaara_system_prompt")
+        .single();
+      
+      if (promptData) {
+        setSystemPrompt(promptData.setting_value);
+      }
+
+      // Load last upload timestamp
+      const { data: uploadData } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "zaara_prompt_last_upload")
+        .single();
+      
+      if (uploadData) {
+        setLastUploadTime(uploadData.setting_value);
+      }
+    } catch (error) {
+      console.error("Error loading prompt:", error);
+    } finally {
+      setLoading(false);
+    }
+    };
+    loadData();
+  }, []);
 
   const defaultPrompt = `## ROLE & PERSONALITY
 
@@ -459,6 +494,35 @@ Anything else you'd like to know or compare, Ahmed Sir? Or would you like help w
     }
   };
 
+  const updateOpenAIPrompt = async () => {
+    setIsUpdatingPrompt(true);
+    try {
+      // Save to database
+      await supabase
+        .from("system_settings")
+        .upsert({
+          setting_key: "zaara_system_prompt",
+          setting_value: systemPrompt,
+          updated_at: new Date().toISOString()
+        });
+
+      // Trigger OpenAI Assistant update
+      const { data, error } = await supabase.functions.invoke(
+        "update-openai-assistant"
+      );
+
+      if (error) throw error;
+
+      toast.success("OpenAI Assistant prompt updated successfully");
+      await loadPrompt(); // Reload to get updated timestamp
+    } catch (error) {
+      console.error("Update error:", error);
+      toast.error("Failed to update prompt");
+    } finally {
+      setIsUpdatingPrompt(false);
+    }
+  };
+
   const savePrompt = async () => {
     setSaving(true);
     try {
@@ -579,6 +643,37 @@ Anything else you'd like to know or compare, Ahmed Sir? Or would you like help w
                 />
               )}
             </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>OpenAI Assistant Prompt</CardTitle>
+              <CardDescription>
+                Update Zaara's system instructions in OpenAI
+                {lastUploadTime && (
+                  <span className="block mt-2 text-xs text-muted-foreground">
+                    Last updated: {new Date(lastUploadTime).toLocaleString()}
+                  </span>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                rows={15}
+                className="font-mono text-sm"
+                placeholder="Enter Zaara's system prompt here..."
+              />
+            </CardContent>
+            <CardFooter>
+              <Button 
+                onClick={updateOpenAIPrompt}
+                disabled={isUpdatingPrompt || !systemPrompt}
+              >
+                {isUpdatingPrompt ? "Updating..." : "Update OpenAI Prompt"}
+              </Button>
+            </CardFooter>
           </Card>
 
           <Card>

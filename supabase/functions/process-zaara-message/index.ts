@@ -69,23 +69,6 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "search_faqs",
-      description: "Search FAQ database for questions about policies, warranty, locations, shipping, returns, etc. Use this when customer asks about company information or policies.",
-      parameters: {
-        type: "object",
-        properties: {
-          search_term: { 
-            type: "string", 
-            description: "Search term from customer question (e.g., 'warranty', 'location', 'shipping', 'return')" 
-          },
-        },
-        required: ["search_term"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "save_customer_name",
       description: "Save customer's name to database when they provide it during conversation. This ensures we remember them for future interactions.",
       parameters: {
@@ -104,6 +87,31 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "send_product_image",
+      description: "Send product image with complete details to customer in WhatsApp. Use this IMMEDIATELY after get_product_details when showing product information. This sends image + all product details in ONE message.",
+      parameters: {
+        type: "object",
+        properties: {
+          phone_number: {
+            type: "string",
+            description: "Customer's WhatsApp phone number"
+          },
+          product_id: {
+            type: "string", 
+            description: "Shopify product ID from get_product_details"
+          },
+          caption: {
+            type: "string",
+            description: "Complete formatted product details (name, price, colors, features, reviews, etc.)"
+          }
+        },
+        required: ["phone_number", "product_id", "caption"]
+      }
+    }
+  }
 ];
 
 // Comprehensive keyword mapping for ALL Boost Lifestyle products
@@ -1640,90 +1648,6 @@ User query: ${message}`
               });
             }
           }
-          else if (functionName === "search_faqs") {
-            const searchTerm = args.search_term.toLowerCase().trim();
-            console.log(`🔍 FAQ SEARCH for: "${searchTerm}"`);
-            
-            let allFaqs: any[] = [];
-            
-            // Strategy 1: Try exact phrase
-            const { data: exactResults } = await supabase
-              .from("faq_vectors")
-              .select("id, question, answer, category, video_urls, image_urls")
-              .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%`)
-              .eq("is_active", true)
-              .limit(5);
-            
-            if (exactResults && exactResults.length > 0) {
-              allFaqs = exactResults;
-              console.log(`✅ Found ${exactResults.length} with exact phrase`);
-            } else {
-              // Strategy 2: Word-by-word search (collect ALL matches)
-              const words = searchTerm.split(' ').filter((w: string) => w.length > 2);
-              console.log(`🔄 Trying individual words:`, words);
-              
-              const seenIds = new Set<string>();
-              
-              for (const word of words) {
-                const { data: wordResults } = await supabase
-                  .from("faq_vectors")
-                  .select("id, question, answer, category, video_urls, image_urls")
-                  .or(`question.ilike.%${word}%,answer.ilike.%${word}%`)
-                  .eq("is_active", true)
-                  .limit(3);
-                
-                if (wordResults && wordResults.length > 0) {
-                  // Add unique results only
-                  for (const result of wordResults) {
-                    if (!seenIds.has(result.id)) {
-                      seenIds.add(result.id);
-                      allFaqs.push(result);
-                      if (allFaqs.length >= 5) break; // Max 5 total
-                    }
-                  }
-                  console.log(`✅ Found ${wordResults.length} with "${word}"`);
-                }
-                
-                if (allFaqs.length >= 5) break;
-              }
-            }
-            
-            if (allFaqs.length === 0) {
-              console.log(`❌ NO FAQs found for "${searchTerm}"`);
-              output = JSON.stringify({
-                found: false,
-                search_term: searchTerm,
-                message: `No FAQ found. Contact support: https://wa.me/923038981133`
-              });
-            } else {
-              console.log(`✅ Returning ${allFaqs.length} FAQs`);
-              
-              // Fix URLs and format
-              const enrichedFaqs = allFaqs.map((faq: any) => {
-                let fixedAnswer = faq.answer || '';
-                
-                // Fix malformed URLs (https:youtube → https://youtube)
-                fixedAnswer = fixedAnswer.replace(/https:([^\/])/g, 'https://$1');
-                fixedAnswer = fixedAnswer.replace(/http:([^\/])/g, 'http://$1');
-                fixedAnswer = boldImportantInfo(fixedAnswer);
-                
-                return {
-                  question: faq.question,
-                  answer: fixedAnswer,
-                  category: faq.category,
-                  video_urls: faq.video_urls || [],
-                  image_urls: faq.image_urls || []
-                };
-              });
-              
-              output = JSON.stringify({
-                found: true,
-                count: allFaqs.length,
-                search_term: searchTerm,
-                faqs: enrichedFaqs
-              });
-            }
-          }
           else if (functionName === "save_customer_name") {
             const customerNameToSave = args.customer_name;
             const phoneNumberToSave = args.phone_number;
@@ -1760,6 +1684,56 @@ User query: ${message}`
               output = JSON.stringify({
                 success: false,
                 message: "Failed to save customer name"
+              });
+            }
+          }
+          else if (functionName === "send_product_image") {
+            console.log("📸 send_product_image called:", args);
+            
+            try {
+              // Fetch product to get image
+              const { data: product } = await supabase
+                .from("shopify_products")
+                .select("images, title")
+                .eq("product_id", args.product_id)
+                .single();
+              
+              if (!product) {
+                output = JSON.stringify({
+                  success: false,
+                  message: "Product not found"
+                });
+              } else {
+                const images = JSON.parse(product.images || "[]");
+                const imageUrl = images.length > 0 ? images[0] : null;
+                
+                if (imageUrl) {
+                  console.log(`📸 Sending product image: ${imageUrl}`);
+                  
+                  // Send image with caption via WhatsApp
+                  await sendWhatsAppImage(
+                    supabase, 
+                    args.phone_number, 
+                    imageUrl, 
+                    args.caption
+                  );
+                  
+                  output = JSON.stringify({
+                    success: true,
+                    message: "Product image sent successfully"
+                  });
+                } else {
+                  output = JSON.stringify({
+                    success: false,
+                    message: "No image available for this product"
+                  });
+                }
+              }
+            } catch (error) {
+              console.error("❌ Error in send_product_image:", error);
+              output = JSON.stringify({
+                success: false,
+                message: "Failed to send product image"
               });
             }
           }

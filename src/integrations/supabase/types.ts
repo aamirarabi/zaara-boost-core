@@ -931,6 +931,27 @@ export type Database = {
         }
         Relationships: []
       }
+      system_logs: {
+        Row: {
+          created_at: string | null
+          id: number
+          log_type: string
+          message: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          log_type: string
+          message: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          log_type?: string
+          message?: string
+        }
+        Relationships: []
+      }
       system_settings: {
         Row: {
           description: string | null

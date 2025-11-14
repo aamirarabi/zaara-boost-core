@@ -24,6 +24,21 @@ const FAQs = () => {
     if (data) setFaqs(data);
   };
 
+  const syncToVectorStore = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "sync-faq-to-vector-store"
+      );
+      
+      if (error) throw error;
+      
+      toast.success("FAQs synced to Vector Store successfully!");
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast.error("FAQ saved but sync to Vector Store failed");
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -86,6 +101,9 @@ const FAQs = () => {
       } else {
         toast.success(`✅ Imported ${faqsToInsert.length} FAQs with fixed URLs!`);
         loadFAQs();
+        
+        // Auto-sync to Vector Store after successful upload
+        await syncToVectorStore();
       }
     } catch (error) {
       toast.error("Error reading file. Make sure it's valid JSON.");
