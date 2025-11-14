@@ -72,31 +72,47 @@ Deno.serve(async (req) => {
 
     console.log(`Total products fetched: ${allProducts.length}`);
 
-    // Fetch metafields for each product to get Judge.me ratings
-    console.log('Fetching metafields for products...');
+    // Fetch ALL metafields for each product (Judge.me AND custom like videos)
+    console.log('Fetching all metafields for products...');
     let productsWithReviews = 0;
+    let productsWithVideos = 0;
+    
     for (const product of allProducts) {
       try {
-        const metafieldsUrl = `https://${storeUrl}/admin/api/2024-10/products/${product.id}/metafields.json?namespace=judgeme`;
-        const metaRes = await fetch(metafieldsUrl, {
+        // Fetch ALL metafields without namespace filter
+        const allMetafieldsUrl = `https://${storeUrl}/admin/api/2024-10/products/${product.id}/metafields.json`;
+        const allRes = await fetch(allMetafieldsUrl, {
           headers: { 'X-Shopify-Access-Token': token },
         });
         
-        if (metaRes.ok) {
-          const metaData = await metaRes.json();
-          product.judgeme_metafields = metaData.metafields || [];
+        product.all_metafields = [];
+        
+        if (allRes.ok) {
+          const allData = await allRes.json();
+          product.all_metafields = allData.metafields || [];
           
-          if (product.judgeme_metafields.length > 0) {
+          // Count Judge.me metafields
+          const judgemeFields = product.all_metafields.filter((m: any) => m.namespace === 'judgeme');
+          if (judgemeFields.length > 0) {
             productsWithReviews++;
-            console.log(`✅ Product "${product.title}" has Judge.me data:`, 
-              product.judgeme_metafields.map((m: any) => `${m.key}=${m.value}`).join(', '));
+            console.log(`✅ Product "${product.title}" has Judge.me data`);
+          }
+          
+          // Count video metafields
+          const videoFields = product.all_metafields.filter((m: any) => 
+            m.key === 'product_video' || m.key.includes('video')
+          );
+          if (videoFields.length > 0) {
+            productsWithVideos++;
+            console.log(`🎬 Product "${product.title}" has ${videoFields.length} video metafield(s)`);
           }
         }
       } catch (error) {
         console.error(`Error fetching metafields for product ${product.id}:`, error);
       }
     }
-    console.log(`📊 Summary: ${productsWithReviews} out of ${allProducts.length} products have Judge.me review data`);
+    
+    console.log(`📊 Summary: ${productsWithReviews} products with Judge.me data, ${productsWithVideos} products with videos`);
 
     // Transform products for database
     const productsToUpsert = allProducts.map((p) => {
@@ -104,9 +120,10 @@ Deno.serve(async (req) => {
       let reviewRating = null;
       let reviewCount = 0;
       
-      if (p.judgeme_metafields && p.judgeme_metafields.length > 0) {
-        const ratingMeta = p.judgeme_metafields.find((m: any) => m.key === 'rating');
-        const countMeta = p.judgeme_metafields.find((m: any) => m.key === 'rating_count');
+      if (p.all_metafields && p.all_metafields.length > 0) {
+        const judgemeFields = p.all_metafields.filter((m: any) => m.namespace === 'judgeme');
+        const ratingMeta = judgemeFields.find((m: any) => m.key === 'rating');
+        const countMeta = judgemeFields.find((m: any) => m.key === 'rating_count');
         
         if (ratingMeta?.value) {
           reviewRating = parseFloat(ratingMeta.value);
@@ -116,11 +133,15 @@ Deno.serve(async (req) => {
         }
       }
       
-      // Extract other metafields
+      // Extract ALL metafields
       const metafieldsObj: any = {};
-      if (p.judgeme_metafields) {
-        p.judgeme_metafields.forEach((mf: any) => {
+      if (p.all_metafields && p.all_metafields.length > 0) {
+        p.all_metafields.forEach((mf: any) => {
+          // Store both with and without namespace
           metafieldsObj[mf.key] = mf.value;
+          if (mf.namespace) {
+            metafieldsObj[`${mf.namespace}.${mf.key}`] = mf.value;
+          }
         });
       }
       
