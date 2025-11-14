@@ -17,6 +17,9 @@ function formatDate(dateString: string | null): string {
 
 const TOOLS = [
   {
+    type: "file_search"
+  },
+  {
     type: "function",
     function: {
       name: "search_shop_catalog",
@@ -636,9 +639,8 @@ async function formatProductDetails(product: any, phone_number: string, supabase
   
   let formatted = `${categoryEmoji} *${product.title}*\n\n`;
   
-  // Price (3% discount for prepaid)
-  const prepaidPrice = Math.round(product.price * 0.97);
-  formatted += `💰 *Price:* Rs. ${prepaidPrice.toLocaleString()} (Prepaid) | Rs. ${product.price.toLocaleString()} (COD)\n`;
+  // Price - single price only
+  formatted += `💰 *Price:* Rs. ${product.price.toLocaleString()}\n`;
   
   // Colors
   if (product.colors && product.colors.length > 0) {
@@ -647,7 +649,7 @@ async function formatProductDetails(product: any, phone_number: string, supabase
   
   // Availability
   const inStock = product.inventory > 0;
-  formatted += inStock ? `✅ *Availability:* In Stock\n\n` : `⏳ *Availability:* Coming Soon\n\n`;
+  formatted += inStock ? `✅ *Availability:* In Stock\n\n` : `❌ *Availability:* Out of Stock\n\n`;
   
   // Key Features
   if (product.description) {
@@ -667,14 +669,21 @@ async function formatProductDetails(product: any, phone_number: string, supabase
     formatted += `${product.average_rating}/5 stars (${product.review_count} reviews)\n`;
     
     if (product.reviews && product.reviews.length > 0) {
-      product.reviews.slice(0, 3).forEach((review: any) => {
-        const stars = '⭐'.repeat(Math.min(review.rating, 5));
-        const text = review.body || review.title || "";
-        const name = review.reviewer_name || "Customer";
-        if (text) {
-          formatted += `• ${stars} "${text.substring(0, 50)}..." - ${name}\n`;
-        }
-      });
+      // Filter to ONLY 5-star reviews
+      const fiveStarReviews = product.reviews.filter((r: any) => r.rating === 5);
+      
+      if (fiveStarReviews.length > 0) {
+        fiveStarReviews.slice(0, 3).forEach((review: any) => {
+          const text = review.body || review.title || "";
+          const name = review.reviewer_name || "Customer";
+          const city = review.reviewer_location || "Pakistan";
+          if (text) {
+            formatted += `• ⭐⭐⭐⭐⭐ "${text.substring(0, 50)}..." - ${name}, ${city}\n`;
+          }
+        });
+      } else {
+        formatted += `• ⭐ Be the first to review!\n`;
+      }
     }
     formatted += '\n';
   }
@@ -699,7 +708,7 @@ async function formatProductDetails(product: any, phone_number: string, supabase
   if (inStock) {
     formatted += `${customerName ? customerName + ' Sir/Madam, would' : 'Would'} you like to order this? Reply "Yes" and I'll connect you with our sales team! 😊`;
   } else {
-    formatted += `${customerName ? customerName + ' Sir/Madam, would' : 'Would'} you like notification when back in stock? Reply "Yes"! 🔔`;
+    formatted += `${customerName ? customerName + ' Sir/Madam,' : ''} This product is currently out of stock. Would you like notification when available? Reply "Yes"! 🔔`;
   }
   
   return formatted;
@@ -1176,45 +1185,58 @@ User query: ${message}`
             const searchTerm = searchTerms.toLowerCase();
             
             // IMPROVEMENT: Try exact match first for specific product requests
+            // IMPROVED: Try EXACT product name match first
             const { data: exactMatch } = await supabase
               .from("shopify_products")
               .select("*")
-              .ilike("title", `%${searchTerm}%`)
               .eq("status", "active")
-              .limit(1);
+              .ilike("title", `%${searchTerm}%`)
+              .limit(20);
             
-            // If exact match found and query looks specific (>2 words OR contains product name), return only that product
-            const queryWords = originalQuery.split(/\s+/).length;
-            if (exactMatch && exactMatch.length > 0 && (queryWords >= 2 || containsProductName)) {
-              console.log(`✅ Found exact match: ${exactMatch[0].title}`);
+            // Find BEST match - check if search term is in product title
+            let bestMatch = null;
+            if (exactMatch && exactMatch.length > 0) {
+              // Look for exact product name match
+              for (const product of exactMatch) {
+                const titleLower = product.title.toLowerCase();
+                const searchLower = searchTerm.toLowerCase();
+                
+                // Check if all search words are in the title
+                const searchWords = searchLower.split(/\s+/);
+                const allWordsPresent = searchWords.every(word => 
+                  word.length > 2 && titleLower.includes(word)
+                );
+                
+                if (allWordsPresent) {
+                  bestMatch = product;
+                  console.log(`✅ Found exact match: ${product.title}`);
+                  break;
+                }
+              }
+            }
+            
+            // If specific product match found, return only that product
+            if (bestMatch && containsProductName) {
+              console.log(`✅ Returning single product: ${bestMatch.title}`);
               
-              // Set as single product in context
               await supabase
                 .from("conversation_context")
                 .upsert({
                   phone_number: phone_number,
                   last_product_list: [{ 
-                    product_id: exactMatch[0].product_id, 
-                    title: exactMatch[0].title 
+                    product_id: bestMatch.product_id, 
+                    title: bestMatch.title 
                   }],
                 }, { onConflict: "phone_number" });
               
-              const product = exactMatch[0];
+              const product = bestMatch;
               const variants = JSON.parse(product.variants || "[]");
               
-              // Get price range
-              let priceMin = product.price;
-              let priceMax = product.price;
-              if (variants.length > 1) {
-                const prices = variants.map((v: any) => parseFloat(v.price)).filter((price: number) => !isNaN(price));
-                if (prices.length > 0) {
-                  priceMin = Math.min(...prices);
-                  priceMax = Math.max(...prices);
-                }
-              }
-              
-              // Get colors
-              const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
+              // Get colors (skip payment methods like prepaid/cod)
+              const colors = [...new Set(variants
+                .filter((v: any) => v.option1 && !['prepaid', 'cod', 'cash', 'payment'].includes(v.option1.toLowerCase()))
+                .map((v: any) => v.option1)
+              )];
               
               output = JSON.stringify({
                 found: true,
@@ -1223,11 +1245,12 @@ User query: ${message}`
                 category_emoji: categoryEmoji,
                 products: [{
                   number: 1,
+                  product_id: product.product_id,
                   title: product.title,
-                  price_min: priceMin,
-                  price_max: priceMax,
-                  colors: colors,
-                  in_stock: true
+                  price: product.price,
+                  colors: colors.length > 0 ? colors : ['Standard'],
+                  in_stock: product.inventory > 0,
+                  inventory: product.inventory
                 }]
               });
             } else {
