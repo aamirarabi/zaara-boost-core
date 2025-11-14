@@ -1170,18 +1170,19 @@ User query: ${message}`
               originalQuery.toLowerCase().includes(name)
             );
             
-            // If query contains product name, add it to search terms
+            // If query contains product name, use ONLY that product name for exact match
             let searchTerms = improvedQuery;
             if (containsProductName) {
               // Extract the product name from query
               const foundName = productNameWords.find(name => originalQuery.toLowerCase().includes(name));
-              if (foundName && !searchTerms.toLowerCase().includes(foundName)) {
-                searchTerms += `,${foundName}`;
-                console.log(`📝 Added product name to search: "${foundName}"`);
+              if (foundName) {
+                // Use ONLY the product name for specific product queries
+                searchTerms = foundName;
+                console.log(`📝 Using product name for exact match: "${foundName}"`);
               }
             }
             
-            console.log(`🔎 Final search terms: "${searchTerms}"`);
+            console.log(`🔎 Final search term: "${searchTerms}"`);
             const searchTerm = searchTerms.toLowerCase();
             
             // IMPROVEMENT: Try exact match first for specific product requests
@@ -1257,15 +1258,15 @@ User query: ${message}`
             // FIX #1: Increase limit to 100 to show ALL products
             const limit = args.limit || 100;
             
-            // FIX #2: Expand keywords for better matching
-            const expandedTerm = expandSearchKeywords(searchTerm);
-            console.log(`🔄 Expanded search term from "${searchTerm}" to "${expandedTerm}"`);
+            // Don't use expandedTerm - it might filter too much
+            // Use original searchTerm for broader matching
+            console.log(`🔎 Searching products with term: "${searchTerm}"`);
             
-            // FIX #3: Only show ACTIVE products (status='active')
+            // FIX #2: Only show ACTIVE products (status='active')
             const { data: products, error: searchError } = await supabase
               .from("shopify_products")
               .select("*")
-              .or(`title.ilike.%${expandedTerm}%,description.ilike.%${expandedTerm}%,tags.cs.{${expandedTerm}},product_type.ilike.%${expandedTerm}%`)
+              .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,tags.cs.{${searchTerm}},product_type.ilike.%${searchTerm}%`)
               .eq("status", "active")  // ✅ Only active products
               .order("price", { ascending: true })  // ✅ Price ascending
               .limit(limit);
