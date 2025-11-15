@@ -537,7 +537,7 @@ function improveSearchQuery(userQuery: string): string {
     
     // Map generic terms only
     if (word === 'headphones' || word === 'headphone' || word === 'earphones') return 'headset';
-    if (word === 'chair' || word === 'chairs') return 'gaming chair';
+    if (word === 'chair' || word === 'chairs') return 'chair';
     if (word === 'watch' || word === 'watches') return 'smart watch';
     if (word === 'speaker' || word === 'speakers') return 'speaker';
     
