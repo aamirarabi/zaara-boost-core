@@ -6,13 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle, Video, Star, X } from "lucide-react";
+import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle, Video, Star, X, ChevronDown, ChevronUp, Database } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatPKRCurrency } from "@/lib/utils";
 
 const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     inStock: 0,
@@ -209,6 +211,12 @@ const Products = () => {
             const hasVideo = metafields.product_video ? true : false;
             const reviewCount = product.review_count || 0;
             const avgRating = product.average_rating || null;
+            const isExpanded = expandedProduct === product.product_id;
+            
+            // Extract video metafields
+            const videoMetafields = Object.entries(metafields).filter(([key]) => 
+              key.toLowerCase().includes('video')
+            );
             
             return (
               <Card key={product.product_id}>
@@ -264,9 +272,112 @@ const Products = () => {
                     </div>
                   </div>
                   
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mb-3">
                     {product.product_type} • {product.vendor}
                   </p>
+
+                  {/* Detailed Metadata Section */}
+                  <Collapsible open={isExpanded} onOpenChange={() => setExpandedProduct(isExpanded ? null : product.product_id)}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full">
+                        <Database className="h-4 w-4 mr-2" />
+                        {isExpanded ? "Hide" : "Show"} Shopify Data
+                        {isExpanded ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-3 space-y-2 border-t pt-3">
+                      {/* Basic Info */}
+                      <div className="text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Shopify ID:</span>
+                          <span className="font-mono">{product.shopify_id}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Product ID:</span>
+                          <span className="font-mono">{product.product_id}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Status:</span>
+                          <Badge variant={product.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                            {product.status}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Synced:</span>
+                          <span>{product.synced_at ? new Date(product.synced_at).toLocaleString() : 'Never'}</span>
+                        </div>
+                      </div>
+
+                      {/* Video Metafields */}
+                      <div className="border-t pt-2">
+                        <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
+                          <Video className="h-3 w-3" />
+                          Video Metafields ({videoMetafields.length})
+                        </h4>
+                        {videoMetafields.length > 0 ? (
+                          <div className="space-y-2">
+                            {videoMetafields.map(([key, value]) => (
+                              <div key={key} className="bg-muted/50 rounded p-2 text-xs">
+                                <div className="font-semibold text-primary mb-1">{key}</div>
+                                <div className="font-mono text-[10px] break-all">
+                                  {typeof value === 'string' && value.startsWith('http') ? (
+                                    <a 
+                                      href={value} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-blue-500 hover:underline"
+                                    >
+                                      {value}
+                                    </a>
+                                  ) : (
+                                    String(typeof value === 'object' ? JSON.stringify(value) : value)
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No video metafields found</p>
+                        )}
+                      </div>
+
+                      {/* All Metafields */}
+                      <div className="border-t pt-2">
+                        <h4 className="text-xs font-semibold mb-2">
+                          All Metafields ({Object.keys(metafields).length})
+                        </h4>
+                        {Object.keys(metafields).length > 0 ? (
+                          <div className="max-h-40 overflow-y-auto space-y-1">
+                            {Object.entries(metafields).map(([key, value]) => (
+                              <div key={key} className="flex justify-between text-xs border-b pb-1">
+                                <span className="font-semibold text-primary">{key}:</span>
+                                <span className="font-mono text-[10px] text-right max-w-[60%] truncate" title={typeof value === 'object' ? JSON.stringify(value) : String(value)}>
+                                  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No metafields found</p>
+                        )}
+                      </div>
+
+                      {/* Variants */}
+                      <div className="border-t pt-2">
+                        <h4 className="text-xs font-semibold mb-2">
+                          Variants ({JSON.parse(product.variants || '[]').length})
+                        </h4>
+                        <div className="max-h-32 overflow-y-auto text-xs space-y-1">
+                          {JSON.parse(product.variants || '[]').map((variant: any, idx: number) => (
+                            <div key={idx} className="border-b pb-1">
+                              <div className="font-mono">{variant.title || 'Default'}</div>
+                              <div className="text-muted-foreground">SKU: {variant.sku || 'N/A'} • Stock: {variant.inventory_quantity || 0}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </CardContent>
               </Card>
             );
