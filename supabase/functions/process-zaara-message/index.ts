@@ -1165,16 +1165,39 @@ User query: ${message}`
               'nova', 'throne', 'supreme'
             ];
             
-            // Check if query contains a product name
+            // Detect product type from query
+            const productTypes = {
+              'chair': ['chair', 'chairs'],
+              'headphone': ['headphone', 'headphones', 'headset', 'headsets'],
+              'earbud': ['earbud', 'earbuds', 'earphone', 'earphones'],
+              'mouse': ['mouse', 'mice'],
+              'keyboard': ['keyboard', 'keyboards'],
+              'mousepad': ['mousepad', 'mousepads', 'pad', 'pads'],
+              'watch': ['watch', 'watches', 'smartwatch'],
+              'powerbank': ['powerbank', 'powerbanks', 'power bank']
+            };
+            
+            let detectedProductType = null;
+            for (const [type, keywords] of Object.entries(productTypes)) {
+              if (keywords.some(keyword => new RegExp('\\b' + keyword + '\\b', 'i').test(originalQuery))) {
+                detectedProductType = type;
+                console.log(`🏷️ Detected product type: "${type}"`);
+                break;
+              }
+            }
+            
+            // Check if query contains a product name (using word boundaries)
             const containsProductName = productNameWords.some(name => 
-              originalQuery.toLowerCase().includes(name)
+              new RegExp('\\b' + name + '\\b', 'i').test(originalQuery)
             );
             
             // If query contains product name, use ONLY that product name for exact match
             let searchTerms = improvedQuery;
             if (containsProductName) {
-              // Extract the product name from query
-              const foundName = productNameWords.find(name => originalQuery.toLowerCase().includes(name));
+              // Extract the product name from query (using word boundaries)
+              const foundName = productNameWords.find(name => 
+                new RegExp('\\b' + name + '\\b', 'i').test(originalQuery)
+              );
               if (foundName) {
                 // Use ONLY the product name for specific product queries
                 searchTerms = foundName;
@@ -1186,13 +1209,20 @@ User query: ${message}`
             const searchTerm = searchTerms.toLowerCase();
             
             // IMPROVEMENT: Try exact match first for specific product requests
-            // IMPROVED: Try EXACT product name match first
-            const { data: exactMatch } = await supabase
+            // IMPROVED: Try EXACT product name match first with optional product type filtering
+            let query = supabase
               .from("shopify_products")
               .select("*")
               .eq("status", "active")
-              .ilike("title", `%${searchTerm}%`)
-              .limit(20);
+              .ilike("title", `%${searchTerm}%`);
+            
+            // Filter by product type if detected
+            if (detectedProductType) {
+              query = query.ilike("product_type", `%${detectedProductType}%`);
+              console.log(`🎯 Filtering by product type: "${detectedProductType}"`);
+            }
+            
+            const { data: exactMatch } = await query.limit(20);
             
             // Find BEST match - check if search term is in product title
             let bestMatch = null;
@@ -1453,18 +1483,53 @@ User query: ${message}`
                 console.log(`ℹ️ No FAQ videos found for this product`);
               }
               
-              // Extract video URL from metafields
+              // Extract video URLs from metafields - check ALL possible field names
               const metafields = product.metafields || {};
-              let videoUrl = null;
+              let productVideoUrls: string[] = [];
               
-              if (metafields.product_video) {
-                videoUrl = metafields.product_video;
-              } else if (Array.isArray(metafields) && metafields.length > 0) {
-                const videoMeta = metafields.find((m: any) => 
-                  m.namespace === 'custom' && m.key === 'product_video'
-                );
-                if (videoMeta) videoUrl = videoMeta.value;
+              // Possible metafield names for videos
+              const videoFieldNames = [
+                'product_video',
+                'Product Review Video',
+                'Assembly or Unboxing Video',
+                'product_demo_video',
+                'custom.product_demo_video'
+              ];
+              
+              console.log(`📹 Checking metafields for video URLs...`);
+              
+              // Check if metafields is an object (direct properties)
+              if (metafields && typeof metafields === 'object' && !Array.isArray(metafields)) {
+                for (const fieldName of videoFieldNames) {
+                  if (metafields[fieldName]) {
+                    productVideoUrls.push(metafields[fieldName]);
+                    console.log(`📹 Found video in metafield "${fieldName}": ${metafields[fieldName]}`);
+                  }
+                }
               }
+              
+              // Check if metafields is an array
+              if (Array.isArray(metafields) && metafields.length > 0) {
+                for (const meta of metafields) {
+                  // Check various field name patterns
+                  if (meta.key && videoFieldNames.some(name => 
+                    name.toLowerCase().includes(meta.key.toLowerCase()) || 
+                    meta.key.toLowerCase().includes('video')
+                  )) {
+                    if (meta.value) {
+                      productVideoUrls.push(meta.value);
+                      console.log(`📹 Found video in array metafield "${meta.namespace}.${meta.key}": ${meta.value}`);
+                    }
+                  }
+                }
+              }
+              
+              // Remove duplicates
+              productVideoUrls = [...new Set(productVideoUrls)];
+              console.log(`📹 Total video URLs found: ${productVideoUrls.length}`);
+              
+              // Legacy support - keep videoUrl for backward compatibility
+              const videoUrl = productVideoUrls.length > 0 ? productVideoUrls[0] : null;
               
               // Get images
               const images = JSON.parse(product.images || "[]");
