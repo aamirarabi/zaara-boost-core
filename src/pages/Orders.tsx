@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2, Truck, AlertCircle } from "lucide-react";
 import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
 const Orders = () => {
@@ -20,6 +21,7 @@ const Orders = () => {
   const [courierFilter, setCourierFilter] = useState("all");
   const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [courierStats, setCourierStats] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -72,6 +74,7 @@ const Orders = () => {
   };
 
   const loadOrders = async () => {
+    setLoading(true);
     let query = supabase.from("shopify_orders").select("*").order("created_at", { ascending: false });
 
     if (statusFilter !== "all") {
@@ -92,6 +95,7 @@ const Orders = () => {
 
     const { data } = await query;
     if (data) setOrders(data);
+    setLoading(false);
   };
 
   const loadCourierStats = async () => {
@@ -405,7 +409,14 @@ const Orders = () => {
           </div>
         )}
 
-        {orders.length === 0 ? (
+        {loading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </div>
+        ) : orders.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mb-4" />
