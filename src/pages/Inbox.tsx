@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Send, Trash2, Download } from "lucide-react";
+import { Send, Trash2, Download, Trash } from "lucide-react";
 import { CustomerIntelligencePanel } from "@/components/inbox/CustomerIntelligencePanel";
 import { QuickReplies } from "@/components/inbox/QuickReplies";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ const Inbox = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [phoneToDelete, setPhoneToDelete] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +143,41 @@ const Inbox = () => {
     }
   };
 
+  const handleClearAllChats = async () => {
+    try {
+      // Delete all from chat_history
+      const { error: chatError } = await supabase
+        .from("chat_history")
+        .delete()
+        .neq("phone_number", "");
+
+      // Delete all from conversation_context
+      const { error: contextError } = await supabase
+        .from("conversation_context")
+        .delete()
+        .neq("phone_number", "");
+
+      // Delete all from conversation_analytics
+      const { error: analyticsError } = await supabase
+        .from("conversation_analytics")
+        .delete()
+        .neq("phone_number", "");
+
+      if (chatError || contextError || analyticsError) {
+        toast.error("Failed to clear all chats");
+      } else {
+        toast.success("All chats cleared successfully");
+        setSelectedPhone(null);
+        setMessages([]);
+        setConversations([]);
+      }
+    } catch (error) {
+      toast.error("Error clearing all chats");
+    } finally {
+      setDeleteAllDialogOpen(false);
+    }
+  };
+
   const openDeleteDialog = (phone: string) => {
     setPhoneToDelete(phone);
     setDeleteDialogOpen(true);
@@ -252,10 +288,20 @@ const Inbox = () => {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Inbox</h1>
-          <Button onClick={downloadAllChats} variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Download All Chats
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => setDeleteAllDialogOpen(true)} 
+              variant="destructive" 
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Clear All Chats
+            </Button>
+            <Button onClick={downloadAllChats} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Download All Chats
+            </Button>
+          </div>
         </div>
 
         <div className="flex h-[calc(100vh-12rem)] gap-4">
@@ -420,6 +466,23 @@ const Inbox = () => {
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteChat} className="bg-destructive text-destructive-foreground">
                 Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear All Chats</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete ALL conversations, messages, and chat history? This will completely clear the inbox and cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleClearAllChats} className="bg-destructive text-destructive-foreground">
+                Clear All Chats
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
