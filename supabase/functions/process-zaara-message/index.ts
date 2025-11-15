@@ -1694,13 +1694,72 @@ User query: ${message}`
                 }
               }
               
+              // Helper: Format date with time
+              const formatDateWithTime = (isoString: string | null): string => {
+                if (!isoString) return "Not available";
+                const date = new Date(isoString);
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const hours = date.getHours();
+                const minutes = date.getMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                const displayHours = hours % 12 || 12;
+                const displayMinutes = minutes.toString().padStart(2, '0');
+                return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()} at ${displayHours}:${displayMinutes} ${ampm}`;
+              };
+
+              // Helper: Calculate expected delivery based on city
+              const calculateExpectedDelivery = (dispatchDate: string | null, city: string): { date: string, days: number, rawDate: Date | null } => {
+                if (!dispatchDate) return { date: "Pending dispatch", days: 0, rawDate: null };
+                
+                const dispatch = new Date(dispatchDate);
+                const isKarachi = city.toLowerCase().includes('karachi');
+                const daysToAdd = isKarachi ? 2 : 5;
+                
+                const expected = new Date(dispatch);
+                expected.setDate(expected.getDate() + daysToAdd);
+                
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const formatted = `${expected.getDate()} ${months[expected.getMonth()]} ${expected.getFullYear()}`;
+                
+                return { date: formatted, days: daysToAdd, rawDate: expected };
+              };
+
+              // Helper: Compare delivery timing
+              const compareDeliveryTiming = (expectedDate: Date | null, courierEta: string | null): string => {
+                if (!courierEta || !expectedDate) return "";
+                
+                try {
+                  const courier = new Date(courierEta);
+                  
+                  const diffTime = courier.getTime() - expectedDate.getTime();
+                  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                  
+                  if (diffDays === 0) return "✅ On Time!";
+                  if (diffDays < 0) {
+                    const earlyDays = Math.abs(diffDays);
+                    return earlyDays === 1 ? "🎉 1 day early!" : `🎉 ${earlyDays} days early!`;
+                  }
+                  return diffDays === 1 ? "⚠️ 1 day late" : `⚠️ ${diffDays} days late`;
+                } catch {
+                  return "";
+                }
+              };
+
+              // Calculate expected delivery
+              const expectedDelivery = calculateExpectedDelivery(order.fulfillment_date, city);
+              const deliveryTimingStatus = compareDeliveryTiming(expectedDelivery.rawDate, courierTracking?.estimatedDate || null);
+
               output = JSON.stringify({
                 found: true,
                 order_number: order.order_number,
                 order_date: order.created_at,
                 order_date_formatted: formatDate(order.created_at),
+                order_date_with_time: formatDateWithTime(order.created_at),
                 dispatch_date: order.fulfillment_date || null,
                 dispatch_date_formatted: formatDate(order.fulfillment_date),
+                dispatch_date_with_time: formatDateWithTime(order.fulfillment_date),
+                expected_delivery_date: expectedDelivery.date,
+                expected_delivery_days: expectedDelivery.days,
                 customer_name: order.customer_name || "Customer",
                 customer_email: order.customer_email || null,
                 customer_phone: order.customer_phone || null,
@@ -1714,6 +1773,8 @@ User query: ${message}`
                 tracking_url: order.tracking_url || null,
                 courier_status: courierTracking?.status || null,
                 courier_eta: courierTracking?.estimatedDate || null,
+                courier_eta_with_time: formatDateWithTime(courierTracking?.estimatedDate || null),
+                delivery_timing_status: deliveryTimingStatus,
                 scheduled_eta: scheduledETA.scheduledDate,
                 scheduled_days: scheduledETA.daysFromFulfillment,
                 delivery_status: deliveryStatus,
