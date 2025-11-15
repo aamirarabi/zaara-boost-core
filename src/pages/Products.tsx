@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangle, Video, Star, X, ChevronDown, ChevronUp, Database } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatPKRCurrency } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -28,6 +30,7 @@ const Products = () => {
   }, []);
 
   const loadProducts = async () => {
+    setLoading(true);
     const { data } = await supabase.from("shopify_products").select("*").order("title");
     
     if (data) {
@@ -63,6 +66,7 @@ const Products = () => {
       
       setProducts(productsWithStats);
     }
+    setLoading(false);
   };
 
   const loadStats = async () => {
@@ -204,8 +208,24 @@ const Products = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {loading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-32 w-full rounded-lg" />
+            <Skeleton className="h-32 w-full rounded-lg" />
+            <Skeleton className="h-32 w-full rounded-lg" />
+            <Skeleton className="h-32 w-full rounded-lg" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProducts.map((product) => {
+            const METAFIELD_DISPLAY_NAMES: Record<string, string> = {
+              'product_demo_video': 'Product Demo Video',
+              'custom.product_demo_video': 'Product Demo Video',
+              'Product Review Video': 'Product Review Video',
+              'Assembly or Unboxing Video': 'Assembly or Unboxing Video',
+              'Product DVC': 'Product DVC'
+            };
+
             const images = JSON.parse(product.images || "[]");
             const metafields = product.metafields || {};
             const hasVideo = metafields.product_video ? true : false;
@@ -316,25 +336,28 @@ const Products = () => {
                         </h4>
                         {videoMetafields.length > 0 ? (
                           <div className="space-y-2">
-                            {videoMetafields.map(([key, value]) => (
-                              <div key={key} className="bg-muted/50 rounded p-2 text-xs">
-                                <div className="font-semibold text-primary mb-1">{key}</div>
-                                <div className="font-mono text-[10px] break-all">
-                                  {typeof value === 'string' && value.startsWith('http') ? (
-                                    <a 
-                                      href={value} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      className="text-blue-500 hover:underline"
-                                    >
-                                      {value}
-                                    </a>
-                                  ) : (
-                                    String(typeof value === 'object' ? JSON.stringify(value) : value)
-                                  )}
+                            {videoMetafields.map(([key, value]) => {
+                              const displayName = METAFIELD_DISPLAY_NAMES[key] || key;
+                              return (
+                                <div key={key} className="bg-muted/50 rounded p-2 text-xs">
+                                  <div className="font-semibold text-primary mb-1">📹 {displayName}</div>
+                                  <div className="font-mono text-[10px] break-all">
+                                    {typeof value === 'string' && value.startsWith('http') ? (
+                                      <a 
+                                        href={value} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:underline"
+                                      >
+                                        {value}
+                                      </a>
+                                    ) : (
+                                      String(typeof value === 'object' ? JSON.stringify(value) : value)
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <p className="text-xs text-muted-foreground">No video metafields found</p>
@@ -383,6 +406,7 @@ const Products = () => {
             );
           })}
         </div>
+        )}
       </div>
     </Layout>
   );

@@ -30,6 +30,7 @@ const Inbox = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [phoneToDelete, setPhoneToDelete] = useState<string | null>(null);
+  const [isZaaraTyping, setIsZaaraTyping] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -50,13 +51,13 @@ const Inbox = () => {
   const loadConversations = async () => {
     const { data } = await supabase
       .from("chat_history")
-      .select("phone_number, created_at")
+      .select("phone_number, created_at, content")
       .order("created_at", { ascending: false });
 
     if (data) {
       const uniquePhones = Array.from(new Map(data.map((item) => [item.phone_number, item])).values());
       
-      // Fetch customer names
+      // Fetch customer names and last message
       const conversationsWithNames = await Promise.all(
         uniquePhones.map(async (conv) => {
           const { data: contextData } = await supabase
@@ -65,9 +66,20 @@ const Inbox = () => {
             .eq("phone_number", conv.phone_number)
             .maybeSingle();
           
+          // Get last message
+          const { data: lastMsg } = await supabase
+            .from("chat_history")
+            .select("content, created_at")
+            .eq("phone_number", conv.phone_number)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+          
           return {
             ...conv,
-            customer_name: contextData?.customer_name || null
+            customer_name: contextData?.customer_name || null,
+            last_message: lastMsg?.content || "",
+            last_message_time: lastMsg?.created_at || conv.created_at
           };
         })
       );
@@ -94,6 +106,8 @@ const Inbox = () => {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone) return;
 
+    setIsZaaraTyping(true);
+
     const { error } = await supabase.from("chat_history").insert({
       phone_number: selectedPhone,
       content: newMessage,
@@ -106,6 +120,13 @@ const Inbox = () => {
     if (!error) {
       setNewMessage("");
       loadMessages(selectedPhone);
+      
+      // Simulate waiting for Zaara response
+      setTimeout(() => {
+        setIsZaaraTyping(false);
+      }, 3000);
+    } else {
+      setIsZaaraTyping(false);
     }
   };
 
@@ -309,37 +330,71 @@ const Inbox = () => {
           <div className="w-1/4 border-r">
             <ScrollArea className="h-full bg-gray-50 rounded-lg">{" "}
               <div className="p-4 space-y-2">
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.phone_number}
-                    className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                      selectedPhone === conv.phone_number
-                        ? "bg-primary text-secondary"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    <Avatar onClick={() => handleSelectConversation(conv.phone_number)} className="cursor-pointer">
-                      <AvatarFallback>{conv.phone_number.slice(-2)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 overflow-hidden cursor-pointer" onClick={() => handleSelectConversation(conv.phone_number)}>
-                      <p className="font-medium truncate">{conv.customer_name || conv.phone_number}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {conv.customer_name ? conv.phone_number : new Date(conv.created_at).toLocaleTimeString()}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDeleteDialog(conv.phone_number);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                {conversations.map((conv) => {
+                  const getInitials = (name: string | null, phone: string) => {
+                    if (name) {
+                      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                    }
+                    return phone.slice(-2);
+                  };
+
+                  const getTimeAgo = (timestamp: string) => {
+                    const now = new Date();
+                    const time = new Date(timestamp);
+                    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+                    
+                    if (diffInMinutes < 1) return 'Just now';
+                    if (diffInMinutes < 60) return `${diffInMinutes} min${diffInMinutes > 1 ? 's' : ''} ago`;
+                    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hr${Math.floor(diffInMinutes / 60) > 1 ? 's' : ''} ago`;
+                    return `${Math.floor(diffInMinutes / 1440)} day${Math.floor(diffInMinutes / 1440) > 1 ? 's' : ''} ago`;
+                  };
+
+                  return (
+                    <div
+                      key={conv.phone_number}
+                      className={`flex items-start gap-3 p-3 rounded-lg transition-all cursor-pointer group ${
+                        selectedPhone === conv.phone_number
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "hover:bg-muted hover:shadow-sm"
+                      }`}
+                      onClick={() => handleSelectConversation(conv.phone_number)}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
+                      <div className="relative">
+                        <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+                          <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white font-semibold">
+                            {getInitials(conv.customer_name, conv.phone_number)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {/* Online status indicator - show if message within last 5 mins */}
+                        {new Date(conv.last_message_time).getTime() > Date.now() - 5 * 60 * 1000 && (
+                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-background"></div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-semibold truncate">{conv.customer_name || conv.phone_number}</p>
+                          <span className="text-xs opacity-70 whitespace-nowrap ml-2">
+                            {getTimeAgo(conv.last_message_time)}
+                          </span>
+                        </div>
+                        <p className="text-sm opacity-80 truncate">
+                          {conv.last_message || "No messages yet"}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDeleteDialog(conv.phone_number);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </ScrollArea>
           </div>
@@ -418,6 +473,21 @@ const Inbox = () => {
                     ))}
                   </div>
                 </ScrollArea>
+
+                {/* Typing Indicator */}
+                {isZaaraTyping && (
+                  <div className="px-4 py-2">
+                    <div className="flex items-center gap-2 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg w-fit">
+                      <span className="text-lg">💬</span>
+                      <span className="text-sm font-medium text-gray-700">Zaara is typing</span>
+                      <div className="flex gap-1">
+                        <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
+                        <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
+                        <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <QuickReplies onSelectReply={(text) => setNewMessage(text)} />
 
