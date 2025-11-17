@@ -1983,16 +1983,24 @@ User query: ${message}`
           if (runDataResponse.ok) {
             const runData = await runDataResponse.json();
             
-            // Check if there were tool calls with outputs
-            const toolCalls = runData.required_action?.submit_tool_outputs?.tool_calls || [];
-            
+            // Check completed steps for tool calls (works after run completes)
+            const steps = runData.steps || [];
+            const toolCalls: any[] = [];
+
+            for (const step of steps) {
+              if (step.type === "tool_calls" && step.step_details?.tool_calls) {
+                toolCalls.push(...step.step_details.tool_calls);
+              }
+            }
+
+            console.log(`🔍 Found ${toolCalls.length} tool calls in completed run`);
+
+            // Continue with existing code...
             for (const toolCall of toolCalls) {
-              if (toolCall.function.name === "get_product_details") {
+              if (toolCall.function?.name === "get_product_details") {
                 try {
-                  // Parse the output that was submitted
                   const args = JSON.parse(toolCall.function.arguments);
                   
-                  // Re-fetch product to get image
                   const { data: product } = await supabase
                     .from("shopify_products")
                     .select("images")
@@ -2003,12 +2011,12 @@ User query: ${message}`
                     const images = JSON.parse(product.images || "[]");
                     if (images.length > 0) {
                       imageUrl = images[0];
-                      console.log("📸 Found image URL:", imageUrl);
+                      console.log("📸 Found image URL from completed run:", imageUrl);
                       break;
                     }
                   }
                 } catch (e) {
-                  console.error("Error parsing tool output:", e);
+                  console.error("Error parsing tool call:", e);
                 }
               }
             }
