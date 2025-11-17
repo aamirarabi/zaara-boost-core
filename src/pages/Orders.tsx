@@ -271,83 +271,62 @@ const Orders = () => {
     setExporting(true);
     
     try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - exportDays);
-      
-      const { data: orders } = await supabase
-        .from("shopify_orders")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .not("courier_name", "is", null)
-        .not("actual_delivery_date", "is", null);
-      
-      if (!orders || orders.length === 0) {
-        toast.error("No delivered orders in selected period");
-        setExporting(false);
-        return;
-      }
-      
-      const courierPerformance: any = {};
-      orders.forEach((order) => {
-        const courier = normalizeCourierName(order.courier_name);
-        if (!courier) return;
-        
-        if (!courierPerformance[courier]) {
-          courierPerformance[courier] = { name: courier, total: 0, onTime: 0, early: 0, late: 0, totalDelayDays: 0 };
-        }
-        
-        courierPerformance[courier].total++;
-        
-        if (order.actual_delivery_date && order.dispatched_at) {
-          const actual = new Date(order.actual_delivery_date);
-          const dispatched = new Date(order.dispatched_at);
-          const shippingAddress = order.shipping_address as any;
-          const city = shippingAddress?.city?.toLowerCase() || "";
-          const isKarachi = city.includes("karachi");
-          const expectedDays = isKarachi ? 2 : 5;
-          const expectedDelivery = new Date(dispatched);
-          expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
-          
-          const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (diffDays < 0) courierPerformance[courier].early++;
-          else if (diffDays === 0) courierPerformance[courier].onTime++;
-          else {
-            courierPerformance[courier].late++;
-            courierPerformance[courier].totalDelayDays += diffDays;
-          }
-        }
-      });
-      
       const doc = new jsPDF();
-      doc.setFontSize(18);
-      doc.text("Boost Lifestyle - Courier Performance Report", 14, 20);
-      doc.setFontSize(11);
-      doc.text(`Period: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`, 14, 30);
-      doc.text(`Total Orders: ${orders.length}`, 14, 37);
       
-      const tableData = Object.values(courierPerformance).map((courier: any) => {
-        const onTimeRate = courier.total > 0 ? Math.round(((courier.onTime + courier.early) / courier.total) * 100) : 0;
-        const avgDelay = courier.late > 0 ? (courier.totalDelayDays / courier.late).toFixed(1) : "0";
-        return [courier.name, courier.total, courier.early, courier.onTime, courier.late, `${onTimeRate}%`, avgDelay];
+      // Add title
+      doc.setFontSize(16);
+      doc.text('Orders Report', 14, 20);
+      
+      // Add date
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+      
+      // Prepare table data
+      const tableData = filteredOrders.map((order: any) => {
+        const shippingAddress = order.shipping_address || {};
+        const city = shippingAddress.city || 'N/A';
+        
+        const orderDate = order.created_at 
+          ? new Date(order.created_at).toLocaleDateString('en-GB')
+          : '—';
+        
+        const dispatchDate = order.dispatched_at
+          ? new Date(order.dispatched_at).toLocaleDateString('en-GB')
+          : '—';
+        
+        const items = Array.isArray(order.line_items) ? order.line_items : [];
+        const productName = items.length > 0 
+          ? items[0].name || 'N/A'
+          : 'N/A';
+        
+        return [
+          order.order_number,
+          order.customer_name || 'N/A',
+          orderDate,
+          dispatchDate,
+          city,
+          order.courier_name || 'Not Assigned',
+          `${items.length}x ${productName.substring(0, 30)}`,
+          order.order_source || 'Organic',
+          `${order.currency} ${order.total_price?.toLocaleString()}`,
+          order.delivered_at ? 'Delivered' : order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending',
+        ];
       });
       
+      // Add table
       (doc as any).autoTable({
-        startY: 45,
-        head: [['Courier', 'Total', 'Early', 'On Time', 'Late', 'On-Time Rate', 'Avg Delay (days)']],
+        startY: 35,
+        head: [['Order #', 'Customer', 'Order Date', 'Dispatch', 'City', 'Courier', 'Items', 'Source', 'Total', 'Status']],
         body: tableData,
-        theme: 'grid',
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [245, 158, 11] },
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
       });
       
-      doc.save(`Courier-Performance-${exportDays}days-${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success("PDF exported successfully!");
+      doc.save(`orders-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('PDF exported successfully!');
     } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Failed to export PDF");
+      console.error('Export error:', error);
+      toast.error('Failed to export PDF');
     }
     
     setExporting(false);
@@ -357,130 +336,71 @@ const Orders = () => {
     setExporting(true);
     
     try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - exportDays);
-      
-      const { data: orders } = await supabase
-        .from("shopify_orders")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .not("courier_name", "is", null)
-        .not("actual_delivery_date", "is", null);
-      
-      if (!orders || orders.length === 0) {
-        toast.error("No delivered orders in selected period");
-        setExporting(false);
-        return;
-      }
-      
-      const excelData = orders.map((order) => {
-        const courier = normalizeCourierName(order.courier_name);
-        const shippingAddress = order.shipping_address as any;
-        const city = shippingAddress?.city || "";
-        const isKarachi = city.toLowerCase().includes("karachi");
-        const expectedDays = isKarachi ? 2 : 5;
+      const excelData = filteredOrders.map((order: any) => {
+        const shippingAddress = order.shipping_address || {};
+        const city = shippingAddress.city || 'N/A';
         
-        let performance = "Pending";
-        let daysLate = 0;
+        const orderDate = order.created_at 
+          ? new Date(order.created_at).toLocaleDateString('en-GB')
+          : '';
         
-        if (order.actual_delivery_date && order.dispatched_at) {
-          const actual = new Date(order.actual_delivery_date);
-          const dispatched = new Date(order.dispatched_at);
-          const expectedDelivery = new Date(dispatched);
-          expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
+        const dispatchDate = order.dispatched_at
+          ? new Date(order.dispatched_at).toLocaleDateString('en-GB')
+          : '';
+        
+        let eta = '';
+        let delayDays = '';
+        
+        if (order.dispatched_at) {
+          const dispatch = new Date(order.dispatched_at);
+          const isKarachi = city.toLowerCase().includes('karachi');
+          const slaDays = isKarachi ? 2 : 5;
           
-          const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
-          daysLate = diffDays;
+          const etaDate = new Date(dispatch);
+          etaDate.setDate(etaDate.getDate() + slaDays);
+          eta = etaDate.toLocaleDateString('en-GB');
           
-          if (diffDays < 0) performance = "Early";
-          else if (diffDays === 0) performance = "On Time";
-          else performance = "Late";
+          if (order.delivered_at) {
+            const delivered = new Date(order.delivered_at);
+            const diffTime = delivered.getTime() - etaDate.getTime();
+            const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            delayDays = days < 0 ? `${Math.abs(days)}d Early` : days === 0 ? 'On-Time' : `${days}d Late`;
+          }
         }
         
+        const items = Array.isArray(order.line_items) ? order.line_items : [];
+        const productName = items.length > 0 
+          ? items[0].name || 'N/A'
+          : 'N/A';
+        
         return {
-          "Order Number": order.order_number,
-          "Customer": order.customer_name || "N/A",
-          "Phone": order.customer_phone || "N/A",
-          "City": city,
-          "Courier": courier,
-          "Order Date": new Date(order.created_at).toLocaleDateString(),
-          "Dispatched Date": order.dispatched_at ? new Date(order.dispatched_at).toLocaleDateString() : "N/A",
-          "Expected Delivery": order.dispatched_at ? new Date(new Date(order.dispatched_at).setDate(new Date(order.dispatched_at).getDate() + expectedDays)).toLocaleDateString() : "N/A",
-          "Actual Delivery": order.actual_delivery_date ? new Date(order.actual_delivery_date).toLocaleDateString() : "N/A",
-          "Performance": performance,
-          "Days Early/Late": daysLate,
-          "Total (PKR)": order.total_price,
-          "Status": order.fulfillment_status || "pending",
+          'Order Number': order.order_number,
+          'Customer Name': order.customer_name || '',
+          'Customer Phone': order.customer_phone || '',
+          'Order Date': orderDate,
+          'Dispatch Date': dispatchDate,
+          'City': city,
+          'Courier': order.courier_name || 'Not Assigned',
+          'Tracking Number': order.tracking_number || '',
+          'Items': `${items.length}x ${productName}`,
+          'Source': order.order_source || 'Organic',
+          'Total': order.total_price,
+          'Currency': order.currency,
+          'Status': order.delivered_at ? 'Delivered' : order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending',
+          'ETA (SLA)': eta,
+          'Delay': delayDays,
         };
       });
       
       const ws = XLSX.utils.json_to_sheet(excelData);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Orders");
+      XLSX.utils.book_append_sheet(wb, ws, 'Orders');
       
-      const courierPerformance: any = {};
-      orders.forEach((order) => {
-        const courier = normalizeCourierName(order.courier_name);
-        if (!courier) return;
-        
-        if (!courierPerformance[courier]) {
-          courierPerformance[courier] = {
-            Courier: courier,
-            "Total Orders": 0,
-            Early: 0,
-            "On Time": 0,
-            Late: 0,
-            "On-Time Rate %": 0,
-            "Avg Delay Days": 0,
-          };
-        }
-        
-        courierPerformance[courier]["Total Orders"]++;
-        
-        if (order.actual_delivery_date && order.dispatched_at) {
-          const actual = new Date(order.actual_delivery_date);
-          const dispatched = new Date(order.dispatched_at);
-          const shippingAddress = order.shipping_address as any;
-          const city = shippingAddress?.city?.toLowerCase() || "";
-          const isKarachi = city.includes("karachi");
-          const expectedDays = isKarachi ? 2 : 5;
-          const expectedDelivery = new Date(dispatched);
-          expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
-          
-          const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (diffDays < 0) courierPerformance[courier].Early++;
-          else if (diffDays === 0) courierPerformance[courier]["On Time"]++;
-          else {
-            courierPerformance[courier].Late++;
-            courierPerformance[courier]["Avg Delay Days"] += diffDays;
-          }
-        }
-      });
-      
-      Object.values(courierPerformance).forEach((courier: any) => {
-        const total = courier["Total Orders"];
-        if (total > 0) {
-          courier["On-Time Rate %"] = Math.round(((courier["On Time"] + courier.Early) / total) * 100);
-          if (courier.Late > 0) {
-            courier["Avg Delay Days"] = (courier["Avg Delay Days"] / courier.Late).toFixed(1);
-          } else {
-            courier["Avg Delay Days"] = 0;
-          }
-        }
-      });
-      
-      const summaryWs = XLSX.utils.json_to_sheet(Object.values(courierPerformance));
-      XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
-      
-      XLSX.writeFile(wb, `Courier-Performance-${exportDays}days-${new Date().toISOString().split('T')[0]}.xlsx`);
-      
-      toast.success("Excel exported successfully!");
+      XLSX.writeFile(wb, `orders-${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.success('Excel exported successfully!');
     } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Failed to export Excel");
+      console.error('Export error:', error);
+      toast.error('Failed to export Excel');
     }
     
     setExporting(false);
@@ -845,25 +765,68 @@ const Orders = () => {
                 <TableRow>
                   <TableHead>Order #</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Order Date</TableHead>
+                  <TableHead>Dispatch Date</TableHead>
+                  <TableHead>City</TableHead>
                   <TableHead>Courier</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Performance</TableHead>
-                  <TableHead>Delivery Time</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>ETA (SLA)</TableHead>
+                  <TableHead>Delay</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => {
+                  // Extract city from shipping_address JSON
+                  const shippingAddress = order.shipping_address || {};
+                  const city = shippingAddress.city || 'N/A';
+                  
+                  // Format dates
+                  const orderDate = order.created_at 
+                    ? new Date(order.created_at).toLocaleDateString('en-GB')
+                    : '—';
+                  
+                  const dispatchDate = order.dispatched_at
+                    ? new Date(order.dispatched_at).toLocaleDateString('en-GB')
+                    : '—';
+                  
+                  // Calculate ETA based on SLA (2 days Karachi, 5 days other)
+                  let eta = '—';
+                  let delayDays = null;
+                  
+                  if (order.dispatched_at) {
+                    const dispatch = new Date(order.dispatched_at);
+                    const isKarachi = city.toLowerCase().includes('karachi');
+                    const slaDays = isKarachi ? 2 : 5;
+                    
+                    const etaDate = new Date(dispatch);
+                    etaDate.setDate(etaDate.getDate() + slaDays);
+                    eta = etaDate.toLocaleDateString('en-GB');
+                    
+                    // Calculate delay if delivered
+                    if (order.delivered_at) {
+                      const delivered = new Date(order.delivered_at);
+                      const diffTime = delivered.getTime() - etaDate.getTime();
+                      delayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    }
+                  }
+                  
+                  // Get product name for hover
                   const items = Array.isArray(order.line_items) ? order.line_items : [];
                   const itemsText = items.map((item: any) => 
                     `${item.quantity}x ${item.name}`
                   ).join(', ');
+                  const productName = items.length > 0 
+                    ? items[0].name || 'N/A'
+                    : 'N/A';
+                  
+                  const shortName = productName.length > 40 
+                    ? productName.substring(0, 40) + '...'
+                    : productName;
                   
                   const courierBadge = getCourierBadge(order.courier_name);
-                  const performance = getDeliveryPerformance(order);
                   
                   return (
                     <TableRow 
@@ -878,14 +841,17 @@ const Orders = () => {
                           <div className="text-sm text-muted-foreground">{order.customer_phone || "—"}</div>
                         </div>
                       </TableCell>
+                      <TableCell className="text-sm">{orderDate}</TableCell>
+                      <TableCell className="text-sm">{dispatchDate}</TableCell>
+                      <TableCell className="text-sm">{city}</TableCell>
                       <TableCell>
                         <Badge className={courierBadge.color}>
                           {courierBadge.icon} {courierBadge.text || order.courier_name}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="max-w-xs truncate" title={itemsText}>
-                          {itemsText || 'No items'}
+                        <div className="max-w-[200px] truncate cursor-help" title={itemsText}>
+                          {items.length}x {shortName}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -893,28 +859,27 @@ const Orders = () => {
                           {order.order_source || 'Organic'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatPKRCurrency(order.total_price)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatPKRCurrency(order.total_price)}</TableCell>
                       <TableCell>
                         <Badge variant={getStatusColor(order.fulfillment_status)}>
-                          {order.fulfillment_status || "Pending"}
+                          {order.delivered_at ? 'Delivered' : order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-sm">{eta}</TableCell>
                       <TableCell>
-                        <Badge className={performance.color}>
-                          {performance.text}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {performance.time ? (
-                          <div className="text-sm font-medium">
-                            {performance.time}
-                          </div>
+                        {delayDays !== null ? (
+                          <span className={`font-medium text-sm ${
+                            delayDays < 0 
+                              ? 'text-green-600'
+                              : delayDays === 0
+                              ? 'text-blue-600'
+                              : 'text-red-600'
+                          }`}>
+                            {delayDays < 0 ? `${Math.abs(delayDays)}d Early` : delayDays === 0 ? 'On-Time' : `${delayDays}d Late`}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        {formatPakistanDate(order.created_at)}
                       </TableCell>
                     </TableRow>
                   );
