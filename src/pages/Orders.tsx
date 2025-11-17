@@ -8,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2, Truck, AlertCircle } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2, Truck, AlertCircle, FileDown, FileSpreadsheet, Download } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import * as XLSX from "xlsx";
 import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -30,6 +33,8 @@ const Orders = () => {
     fulfilledOrders: 0,
     thisMonthOrders: 0,
   });
+  const [exportDays, setExportDays] = useState(15);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -96,6 +101,30 @@ const Orders = () => {
     const { data } = await query;
     if (data) setOrders(data);
     setLoading(false);
+  };
+
+  // Map Shopify courier names to our standard names
+  const normalizeCourierName = (courier: string | null): string | null => {
+    if (!courier) return null;
+    
+    const courierMapping: any = {
+      "Other": "PostEx",
+      "other": "PostEx",
+      "PostEx": "PostEx",
+      "postex": "PostEx",
+      "POSTEX": "PostEx",
+      "Leopards": "Leopards",
+      "leopards": "Leopards",
+      "LEOPARDS": "Leopards",
+      "TCS": "TCS",
+      "tcs": "TCS",
+      "BlueEx": "BlueEx",
+      "blueex": "BlueEx",
+      "Rider": "Rider",
+      "rider": "Rider",
+    };
+    
+    return courierMapping[courier] || courier;
   };
 
   const loadCourierStats = async () => {
@@ -189,6 +218,225 @@ const Orders = () => {
     }
 
     setSyncing(false);
+  };
+
+  const exportToPDF = async () => {
+    setExporting(true);
+    
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - exportDays);
+      
+      const { data: orders } = await supabase
+        .from("shopify_orders")
+        .select("*")
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .not("courier_name", "is", null)
+        .not("actual_delivery_date", "is", null);
+      
+      if (!orders || orders.length === 0) {
+        toast.error("No delivered orders in selected period");
+        setExporting(false);
+        return;
+      }
+      
+      const courierPerformance: any = {};
+      orders.forEach((order) => {
+        const courier = normalizeCourierName(order.courier_name);
+        if (!courier) return;
+        
+        if (!courierPerformance[courier]) {
+          courierPerformance[courier] = { name: courier, total: 0, onTime: 0, early: 0, late: 0, totalDelayDays: 0 };
+        }
+        
+        courierPerformance[courier].total++;
+        
+        if (order.actual_delivery_date && order.dispatched_at) {
+          const actual = new Date(order.actual_delivery_date);
+          const dispatched = new Date(order.dispatched_at);
+          const shippingAddress = order.shipping_address as any;
+          const city = shippingAddress?.city?.toLowerCase() || "";
+          const isKarachi = city.includes("karachi");
+          const expectedDays = isKarachi ? 2 : 5;
+          const expectedDelivery = new Date(dispatched);
+          expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
+          
+          const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays < 0) courierPerformance[courier].early++;
+          else if (diffDays === 0) courierPerformance[courier].onTime++;
+          else {
+            courierPerformance[courier].late++;
+            courierPerformance[courier].totalDelayDays += diffDays;
+          }
+        }
+      });
+      
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text("Boost Lifestyle - Courier Performance Report", 14, 20);
+      doc.setFontSize(11);
+      doc.text(`Period: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`, 14, 30);
+      doc.text(`Total Orders: ${orders.length}`, 14, 37);
+      
+      const tableData = Object.values(courierPerformance).map((courier: any) => {
+        const onTimeRate = courier.total > 0 ? Math.round(((courier.onTime + courier.early) / courier.total) * 100) : 0;
+        const avgDelay = courier.late > 0 ? (courier.totalDelayDays / courier.late).toFixed(1) : "0";
+        return [courier.name, courier.total, courier.early, courier.onTime, courier.late, `${onTimeRate}%`, avgDelay];
+      });
+      
+      (doc as any).autoTable({
+        startY: 45,
+        head: [['Courier', 'Total', 'Early', 'On Time', 'Late', 'On-Time Rate', 'Avg Delay (days)']],
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [245, 158, 11] },
+      });
+      
+      doc.save(`Courier-Performance-${exportDays}days-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success("PDF exported successfully!");
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export PDF");
+    }
+    
+    setExporting(false);
+  };
+
+  const exportToExcel = async () => {
+    setExporting(true);
+    
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - exportDays);
+      
+      const { data: orders } = await supabase
+        .from("shopify_orders")
+        .select("*")
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .not("courier_name", "is", null)
+        .not("actual_delivery_date", "is", null);
+      
+      if (!orders || orders.length === 0) {
+        toast.error("No delivered orders in selected period");
+        setExporting(false);
+        return;
+      }
+      
+      const excelData = orders.map((order) => {
+        const courier = normalizeCourierName(order.courier_name);
+        const shippingAddress = order.shipping_address as any;
+        const city = shippingAddress?.city || "";
+        const isKarachi = city.toLowerCase().includes("karachi");
+        const expectedDays = isKarachi ? 2 : 5;
+        
+        let performance = "Pending";
+        let daysLate = 0;
+        
+        if (order.actual_delivery_date && order.dispatched_at) {
+          const actual = new Date(order.actual_delivery_date);
+          const dispatched = new Date(order.dispatched_at);
+          const expectedDelivery = new Date(dispatched);
+          expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
+          
+          const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
+          daysLate = diffDays;
+          
+          if (diffDays < 0) performance = "Early";
+          else if (diffDays === 0) performance = "On Time";
+          else performance = "Late";
+        }
+        
+        return {
+          "Order Number": order.order_number,
+          "Customer": order.customer_name || "N/A",
+          "Phone": order.customer_phone || "N/A",
+          "City": city,
+          "Courier": courier,
+          "Order Date": new Date(order.created_at).toLocaleDateString(),
+          "Dispatched Date": order.dispatched_at ? new Date(order.dispatched_at).toLocaleDateString() : "N/A",
+          "Expected Delivery": order.dispatched_at ? new Date(new Date(order.dispatched_at).setDate(new Date(order.dispatched_at).getDate() + expectedDays)).toLocaleDateString() : "N/A",
+          "Actual Delivery": order.actual_delivery_date ? new Date(order.actual_delivery_date).toLocaleDateString() : "N/A",
+          "Performance": performance,
+          "Days Early/Late": daysLate,
+          "Total (PKR)": order.total_price,
+          "Status": order.fulfillment_status || "pending",
+        };
+      });
+      
+      const ws = XLSX.utils.json_to_sheet(excelData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Orders");
+      
+      const courierPerformance: any = {};
+      orders.forEach((order) => {
+        const courier = normalizeCourierName(order.courier_name);
+        if (!courier) return;
+        
+        if (!courierPerformance[courier]) {
+          courierPerformance[courier] = {
+            Courier: courier,
+            "Total Orders": 0,
+            Early: 0,
+            "On Time": 0,
+            Late: 0,
+            "On-Time Rate %": 0,
+            "Avg Delay Days": 0,
+          };
+        }
+        
+        courierPerformance[courier]["Total Orders"]++;
+        
+        if (order.actual_delivery_date && order.dispatched_at) {
+          const actual = new Date(order.actual_delivery_date);
+          const dispatched = new Date(order.dispatched_at);
+          const shippingAddress = order.shipping_address as any;
+          const city = shippingAddress?.city?.toLowerCase() || "";
+          const isKarachi = city.includes("karachi");
+          const expectedDays = isKarachi ? 2 : 5;
+          const expectedDelivery = new Date(dispatched);
+          expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
+          
+          const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays < 0) courierPerformance[courier].Early++;
+          else if (diffDays === 0) courierPerformance[courier]["On Time"]++;
+          else {
+            courierPerformance[courier].Late++;
+            courierPerformance[courier]["Avg Delay Days"] += diffDays;
+          }
+        }
+      });
+      
+      Object.values(courierPerformance).forEach((courier: any) => {
+        const total = courier["Total Orders"];
+        if (total > 0) {
+          courier["On-Time Rate %"] = Math.round(((courier["On Time"] + courier.Early) / total) * 100);
+          if (courier.Late > 0) {
+            courier["Avg Delay Days"] = (courier["Avg Delay Days"] / courier.Late).toFixed(1);
+          } else {
+            courier["Avg Delay Days"] = 0;
+          }
+        }
+      });
+      
+      const summaryWs = XLSX.utils.json_to_sheet(Object.values(courierPerformance));
+      XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
+      
+      XLSX.writeFile(wb, `Courier-Performance-${exportDays}days-${new Date().toISOString().split('T')[0]}.xlsx`);
+      
+      toast.success("Excel exported successfully!");
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export Excel");
+    }
+    
+    setExporting(false);
   };
 
   const getCourierBadge = (courier: string | null) => {
@@ -309,19 +557,62 @@ const Orders = () => {
             <h1 className="text-3xl font-bold">Orders</h1>
             <p className="text-muted-foreground">Track and manage customer orders</p>
           </div>
-          <Button onClick={syncOrders} disabled={syncing}>
-            {syncing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sync from Shopify
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2 items-center">
+            <Select value={exportDays.toString()} onValueChange={(v) => setExportDays(parseInt(v))}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 Days</SelectItem>
+                <SelectItem value="15">Last 15 Days</SelectItem>
+                <SelectItem value="30">Last 30 Days</SelectItem>
+                <SelectItem value="60">Last 60 Days</SelectItem>
+                <SelectItem value="90">Last 90 Days</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button onClick={exportToPDF} disabled={exporting} variant="outline" className="hover:bg-red-50">
+              {exporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export PDF
+                </>
+              )}
+            </Button>
+            
+            <Button onClick={exportToExcel} disabled={exporting} variant="outline" className="hover:bg-green-50">
+              {exporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export Excel
+                </>
+              )}
+            </Button>
+            
+            <Button onClick={syncOrders} disabled={syncing}>
+              {syncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sync from Shopify
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
