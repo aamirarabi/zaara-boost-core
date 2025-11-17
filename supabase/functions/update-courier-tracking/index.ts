@@ -5,105 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// PostEx API tracking
-async function trackPostExOrder(trackingNumber: string, apiKey: string): Promise<any> {
-  try {
-    const response = await fetch(
-      `https://api.postex.pk/services/integration/api/order/v1/track-order`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'token': apiKey,
-        },
-        body: JSON.stringify({
-          trackingNumber: trackingNumber,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      console.error(`PostEx API error for ${trackingNumber}:`, response.statusText);
-      return null;
-    }
-
-    const data = await response.json();
-    
-    if (data.statusCode === '200' && data.dist && data.dist.length > 0) {
-      const tracking = data.dist[0].trackingResponse;
-      
-      // Map PostEx status codes
-      const statusMap: Record<string, string> = {
-        '0001': 'At Warehouse',
-        '0002': 'Returned',
-        '0003': 'At PostEx Warehouse',
-        '0004': 'In Transit',
-        '0005': 'Delivered',
-        '0006': 'Returned',
-        '0007': 'Returned',
-        '0008': 'Delivery Under Review',
-        '0013': 'Attempted Delivery',
-      };
-
-      return {
-        deliveryDate: tracking.orderDeliveryDate || null,
-        status: statusMap[tracking.transactionStatus] || tracking.transactionStatus,
-        statusCode: tracking.transactionStatus,
-      };
-    }
-
-    return null;
-  } catch (error) {
-    console.error(`Error tracking PostEx order ${trackingNumber}:`, error);
-    return null;
-  }
-}
-
-// Leopards API tracking
-async function trackLeopardsOrder(
-  trackingNumber: string, 
-  apiKey: string, 
-  apiPassword: string
-): Promise<any> {
-  try {
-    const response = await fetch(
-      `https://merchantapi.leopardscourier.com/api/trackBookedPacket/format/json/`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          api_key: apiKey,
-          api_password: apiPassword,
-          track_numbers: [trackingNumber],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      console.error(`Leopards API error for ${trackingNumber}:`, response.statusText);
-      return null;
-    }
-
-    const data = await response.json();
-    
-    if (data.packet_list && data.packet_list.length > 0) {
-      const packet = data.packet_list[0];
-      
-      return {
-        deliveryDate: packet.delivery_date || null,
-        status: packet.booked_packet_status || 'In Transit',
-        statusCode: packet.booked_packet_status,
-      };
-    }
-
-    return null;
-  } catch (error) {
-    console.error(`Error tracking Leopards order ${trackingNumber}:`, error);
-    return null;
-  }
-}
+// PostEx Status Codes
+const POSTEX_STATUS_MAP: Record<string, string> = {
+  '0001': 'At Merchant\'s Warehouse',
+  '0002': 'Returned',
+  '0003': 'At PostEx Warehouse',
+  '0004': 'Package on Route',
+  '0005': 'Delivered',
+  '0006': 'Returned',
+  '0007': 'Returned',
+  '0008': 'Delivery Under Review',
+  '0013': 'Attempt Made',
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -111,122 +24,203 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const postexToken = Deno.env.get('POSTEX_API_TOKEN')!;
+    const leopardsApiKey = Deno.env.get('LEOPARDS_API_KEY')!;
+    const leopardsApiPassword = Deno.env.get('LEOPARDS_API_PASSWORD')!;
 
-    const postexApiKey = Deno.env.get('POSTEX_API_KEY') ?? '';
-    const leopardsApiKey = Deno.env.get('LEOPARDS_API_KEY') ?? '';
-    const leopardsApiPassword = Deno.env.get('LEOPARDS_API_PASSWORD') ?? '';
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🚀 Starting courier tracking update...');
+    console.log('Starting courier tracking update...');
 
-    // Get all orders with tracking numbers that haven't been delivered yet
-    const { data: orders, error: fetchError } = await supabaseClient
+    // Get all orders with tracking numbers
+    const { data: orders, error: fetchError } = await supabase
       .from('shopify_orders')
       .select('*')
       .not('tracking_number', 'is', null)
-      .is('actual_delivery_date', null)
-      .in('courier_name', ['PostEx', 'Leopards'])
-      .limit(100);
+      .not('courier_name', 'is', null);
 
     if (fetchError) {
-      throw fetchError;
+      throw new Error(`Error fetching orders: ${fetchError.message}`);
     }
 
-    if (!orders || orders.length === 0) {
-      console.log('✅ No orders to track');
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'No pending orders to track',
-          trackedCount: 0,
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    console.log(`Found ${orders?.length || 0} orders to track`);
 
-    console.log(`📦 Found ${orders.length} orders to track`);
+    let updatedCount = 0;
+    const postexOrders: any[] = [];
+    const leopardsOrders: any[] = [];
 
-    let trackedCount = 0;
-    let deliveredCount = 0;
-
-    for (const order of orders) {
-      try {
-        let trackingResult = null;
-
-        // Track based on courier
-        if (order.courier_name === 'PostEx' && postexApiKey) {
-          trackingResult = await trackPostExOrder(order.tracking_number, postexApiKey);
-        } else if (order.courier_name === 'Leopards' && leopardsApiKey && leopardsApiPassword) {
-          trackingResult = await trackLeopardsOrder(
-            order.tracking_number, 
-            leopardsApiKey, 
-            leopardsApiPassword
-          );
-        }
-
-        if (trackingResult) {
-          trackedCount++;
-
-          // Prepare update data
-          const updateData: any = {
-            delivery_status: trackingResult.status,
-            courier_api_status: trackingResult.statusCode,
-            courier_last_updated: new Date().toISOString(),
-          };
-
-          // If delivered, set delivery date
-          if (
-            trackingResult.statusCode === '0005' || // PostEx delivered
-            trackingResult.status?.toLowerCase().includes('delivered')
-          ) {
-            updateData.actual_delivery_date = trackingResult.deliveryDate || new Date().toISOString();
-            deliveredCount++;
-            console.log(`✅ Order ${order.order_number} delivered`);
-          }
-
-          // Update order in database
-          const { error: updateError } = await supabaseClient
-            .from('shopify_orders')
-            .update(updateData)
-            .eq('order_id', order.order_id);
-
-          if (updateError) {
-            console.error(`❌ Error updating order ${order.order_number}:`, updateError);
-          } else {
-            console.log(`✅ Updated tracking for order ${order.order_number}: ${trackingResult.status}`);
-          }
-        }
-
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (orderError) {
-        console.error(`❌ Error processing order ${order.order_number}:`, orderError);
+    // Separate orders by courier
+    for (const order of orders || []) {
+      if (order.courier_name === 'PostEx') {
+        postexOrders.push(order);
+      } else if (order.courier_name === 'Leopards') {
+        leopardsOrders.push(order);
       }
     }
 
-    console.log(`🎉 Tracking complete: ${trackedCount} tracked, ${deliveredCount} delivered`);
+    // ===== POSTEX TRACKING =====
+    if (postexOrders.length > 0) {
+      console.log(`Tracking ${postexOrders.length} PostEx orders...`);
+      
+      const trackingNumbers = postexOrders.map(o => o.tracking_number);
+      
+      try {
+        const postexResponse = await fetch(
+          'https://api.postex.pk/services/integration/api/order/v1/track-bulk-order',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'token': postexToken,
+            },
+            body: JSON.stringify({
+              trackingNumber: trackingNumbers,
+            }),
+          }
+        );
+
+        if (postexResponse.ok) {
+          const postexData = await postexResponse.json();
+          
+          if (postexData.statusCode === '200' && postexData.dist) {
+            for (const trackingResult of postexData.dist) {
+              const trackingResponse = trackingResult.trackingResponse;
+              const trackingNumber = trackingResult.trackingNumber;
+              
+              // Find matching order
+              const order = postexOrders.find(o => o.tracking_number === trackingNumber);
+              if (!order) continue;
+
+              const updateData: any = {
+                courier_last_updated: new Date().toISOString(),
+              };
+
+              // Get delivery date
+              if (trackingResponse.orderDeliveryDate) {
+                updateData.delivered_at = trackingResponse.orderDeliveryDate;
+              }
+
+              // Get status
+              if (trackingResponse.transactionStatus) {
+                const statusText = POSTEX_STATUS_MAP[trackingResponse.transactionStatus] || trackingResponse.transactionStatus;
+                updateData.courier_api_status = statusText;
+                
+                // If delivered, ensure delivered_at is set
+                if (trackingResponse.transactionStatus === '0005' && trackingResponse.orderDeliveryDate) {
+                  updateData.delivered_at = trackingResponse.orderDeliveryDate;
+                }
+              }
+
+              // Update order
+              const { error: updateError } = await supabase
+                .from('shopify_orders')
+                .update(updateData)
+                .eq('order_id', order.order_id);
+
+              if (!updateError) {
+                updatedCount++;
+                console.log(`Updated PostEx order: ${order.order_number}`);
+              } else {
+                console.error(`Error updating ${order.order_number}:`, updateError);
+              }
+            }
+          }
+        }
+      } catch (postexError) {
+        console.error('PostEx API error:', postexError);
+      }
+    }
+
+    // ===== LEOPARDS TRACKING =====
+    if (leopardsOrders.length > 0) {
+      console.log(`Tracking ${leopardsOrders.length} Leopards orders...`);
+      
+      const trackingNumbers = leopardsOrders.map(o => o.tracking_number);
+      
+      try {
+        const leopardsResponse = await fetch(
+          'https://merchantapi.leopardscourier.com/api/trackBookedPacket/format/json/',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              api_key: leopardsApiKey,
+              api_password: leopardsApiPassword,
+              track_numbers: trackingNumbers,
+            }),
+          }
+        );
+
+        if (leopardsResponse.ok) {
+          const leopardsData = await leopardsResponse.json();
+          
+          if (leopardsData.status === 1 && leopardsData.packet_list) {
+            for (const packet of leopardsData.packet_list) {
+              const trackingNumber = packet.tracking_number || packet.track_number;
+              
+              // Find matching order
+              const order = leopardsOrders.find(
+                o => o.tracking_number === trackingNumber
+              );
+              if (!order) continue;
+
+              const updateData: any = {
+                courier_last_updated: new Date().toISOString(),
+              };
+
+              // Get delivery date
+              if (packet.delivery_date) {
+                updateData.delivered_at = packet.delivery_date;
+              }
+
+              // Get status
+              if (packet.booked_packet_status) {
+                updateData.courier_api_status = packet.booked_packet_status;
+              }
+
+              // Update order
+              const { error: updateError } = await supabase
+                .from('shopify_orders')
+                .update(updateData)
+                .eq('order_id', order.order_id);
+
+              if (!updateError) {
+                updatedCount++;
+                console.log(`Updated Leopards order: ${order.order_number}`);
+              } else {
+                console.error(`Error updating ${order.order_number}:`, updateError);
+              }
+            }
+          }
+        }
+      } catch (leopardsError) {
+        console.error('Leopards API error:', leopardsError);
+      }
+    }
+
+    console.log(`Successfully updated ${updatedCount} orders`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        trackedCount,
-        deliveredCount,
-        totalOrders: orders.length,
-        message: `Tracked ${trackedCount} orders, ${deliveredCount} delivered`,
+        updatedCount,
+        totalOrders: orders?.length || 0,
+        postexCount: postexOrders.length,
+        leopardsCount: leopardsOrders.length,
+        message: `Updated ${updatedCount} orders from courier APIs`,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   } catch (error) {
-    console.error('❌ Tracking error:', error);
+    console.error('Tracking update error:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       }),
