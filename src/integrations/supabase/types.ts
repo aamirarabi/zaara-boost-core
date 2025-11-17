@@ -790,6 +790,9 @@ export type Database = {
           actual_delivered_at: string | null
           actual_delivery_date: string | null
           billing_address: Json | null
+          courier_api_status: string | null
+          courier_estimated_delivery: string | null
+          courier_last_updated: string | null
           courier_name: string | null
           created_at: string | null
           currency: string | null
@@ -802,6 +805,7 @@ export type Database = {
           delivery_notes: string | null
           delivery_proof_url: string | null
           delivery_status: string | null
+          dispatched_at: string | null
           estimated_delivery_date: string | null
           financial_status: string | null
           fulfillment_status: string | null
@@ -826,6 +830,9 @@ export type Database = {
           actual_delivered_at?: string | null
           actual_delivery_date?: string | null
           billing_address?: Json | null
+          courier_api_status?: string | null
+          courier_estimated_delivery?: string | null
+          courier_last_updated?: string | null
           courier_name?: string | null
           created_at?: string | null
           currency?: string | null
@@ -838,6 +845,7 @@ export type Database = {
           delivery_notes?: string | null
           delivery_proof_url?: string | null
           delivery_status?: string | null
+          dispatched_at?: string | null
           estimated_delivery_date?: string | null
           financial_status?: string | null
           fulfillment_status?: string | null
@@ -862,6 +870,9 @@ export type Database = {
           actual_delivered_at?: string | null
           actual_delivery_date?: string | null
           billing_address?: Json | null
+          courier_api_status?: string | null
+          courier_estimated_delivery?: string | null
+          courier_last_updated?: string | null
           courier_name?: string | null
           created_at?: string | null
           currency?: string | null
@@ -874,6 +885,7 @@ export type Database = {
           delivery_notes?: string | null
           delivery_proof_url?: string | null
           delivery_status?: string | null
+          dispatched_at?: string | null
           estimated_delivery_date?: string | null
           financial_status?: string | null
           fulfillment_status?: string | null

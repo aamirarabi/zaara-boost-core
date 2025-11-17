@@ -101,14 +101,17 @@ const Orders = () => {
   const loadCourierStats = async () => {
     const { data: courierData } = await supabase
       .from("shopify_orders")
-      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status, created_at, shipping_address")
+      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status, created_at, shipping_address, dispatched_at")
       .not("courier_name", "is", null);
 
     if (!courierData) return;
 
     const statsMap: any = {};
     courierData.forEach((order) => {
-      const courier = order.courier_name;
+      // Normalize courier name (Other → PostEx)
+      const courier = normalizeCourierName(order.courier_name);
+      if (!courier) return;
+      
       if (!statsMap[courier]) {
         statsMap[courier] = {
           name: courier,
@@ -117,19 +120,23 @@ const Orders = () => {
           early: 0,
           late: 0,
           totalDelayDays: 0,
+          delivered: 0,
         };
       }
       
       statsMap[courier].total++;
       
-      if (order.actual_delivery_date && order.created_at) {
+      // Only calculate for delivered orders
+      if (order.actual_delivery_date && order.dispatched_at) {
+        statsMap[courier].delivered++;
+        
         const actual = new Date(order.actual_delivery_date);
-        const dispatched = new Date(order.created_at);
+        const dispatched = new Date(order.dispatched_at);
         const shippingAddress = order.shipping_address as any;
         const city = shippingAddress?.city?.toLowerCase() || "";
         const isKarachi = city.includes("karachi");
         
-        // Calculate expected delivery days from dispatch
+        // Get expected delivery days from settings (Karachi: 2 days, Outside: 5 days)
         const expectedDays = isKarachi ? 2 : 5;
         const expectedDelivery = new Date(dispatched);
         expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
@@ -149,7 +156,7 @@ const Orders = () => {
 
     const statsArray = Object.values(statsMap).map((stat: any) => ({
       ...stat,
-      onTimeRate: stat.total > 0 ? Math.round(((stat.onTime + stat.early) / stat.total) * 100) : 0,
+      onTimeRate: stat.delivered > 0 ? Math.round(((stat.onTime + stat.early) / stat.delivered) * 100) : 0,
       avgDelay: stat.late > 0 ? (stat.totalDelayDays / stat.late).toFixed(1) : 0,
     }));
 
@@ -185,17 +192,19 @@ const Orders = () => {
   };
 
   const getCourierBadge = (courier: string | null) => {
-    if (!courier) return { icon: "📮", color: "bg-gray-100 text-gray-800", text: "Not Assigned" };
+    const normalizedCourier = normalizeCourierName(courier);
+    
+    if (!normalizedCourier) return { icon: "📮", color: "bg-gray-100 text-gray-800", text: "Not Assigned" };
     
     const courierMap: any = {
-      "PostEx": { icon: "📦", color: "bg-blue-100 text-blue-800" },
-      "Leopards": { icon: "🐆", color: "bg-orange-100 text-orange-800" },
-      "TCS": { icon: "🚚", color: "bg-purple-100 text-purple-800" },
-      "BlueEx": { icon: "🔵", color: "bg-sky-100 text-sky-800" },
-      "Rider": { icon: "🏍️", color: "bg-green-100 text-green-800" },
+      "PostEx": { icon: "📦", color: "bg-blue-100 text-blue-800", text: "PostEx" },
+      "Leopards": { icon: "🐆", color: "bg-orange-100 text-orange-800", text: "Leopards" },
+      "TCS": { icon: "🚚", color: "bg-purple-100 text-purple-800", text: "TCS" },
+      "BlueEx": { icon: "🔵", color: "bg-sky-100 text-sky-800", text: "BlueEx" },
+      "Rider": { icon: "🏍️", color: "bg-green-100 text-green-800", text: "Rider" },
     };
     
-    return courierMap[courier] || { icon: "📮", color: "bg-gray-100 text-gray-800", text: courier };
+    return courierMap[normalizedCourier] || { icon: "📮", color: "bg-gray-100 text-gray-800", text: normalizedCourier };
   };
 
   const getDeliveryPerformance = (order: any) => {
