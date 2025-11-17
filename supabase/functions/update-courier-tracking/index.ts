@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     console.log(`📮 PostEx orders: ${postexOrders.length}`);
     console.log(`🐆 Leopards orders: ${leopardsOrders.length}`);
 
-    // ===== POSTEX TRACKING (OFFICIAL API v4.1.9 SPEC) =====
+    // ===== POSTEX TRACKING (POST METHOD WITH JSON BODY) =====
     if (postexOrders.length > 0) {
       console.log(`\n📮 Starting PostEx tracking for ${postexOrders.length} orders...`);
       
@@ -89,13 +89,12 @@ Deno.serve(async (req) => {
       console.log('PostEx tracking numbers:', trackingNumbers.slice(0, 5), '...');
       
       try {
-        console.log('Calling PostEx API (GET method with JSON body per official docs)...');
+        console.log('Calling PostEx API (POST method with JSON body)...');
         
-        // OFFICIAL SPEC: GET method with JSON body containing trackingNumber array
         const postexResponse = await fetch(
           'https://api.postex.pk/services/integration/api/order/v1/track-bulk-order',
           {
-            method: 'GET',
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'token': postexToken,
@@ -110,76 +109,56 @@ Deno.serve(async (req) => {
 
         if (postexResponse.ok) {
           const postexData = await postexResponse.json();
-          console.log('PostEx API response:', JSON.stringify(postexData).substring(0, 500));
+          console.log('✅ PostEx API success!');
+          console.log('Response:', JSON.stringify(postexData).substring(0, 300));
           
           if (postexData.statusCode === '200' && postexData.dist) {
-            console.log(`Processing ${postexData.dist.length} PostEx results...`);
+            console.log(`Processing ${postexData.dist.length} results...`);
             
             for (const trackingResult of postexData.dist) {
               const trackingResponse = trackingResult.trackingResponse;
               const trackingNumber = trackingResult.trackingNumber;
               
-              console.log(`\n--- Processing tracking: ${trackingNumber} ---`);
-              
-              // Find matching order
               const order = postexOrders.find(o => o.tracking_number === trackingNumber);
-              if (!order) {
-                console.log(`⚠️ No matching order found for tracking: ${trackingNumber}`);
-                continue;
-              }
-
-              console.log(`✓ Found order: ${order.order_number} (ID: ${order.order_id})`);
+              if (!order) continue;
 
               const updateData: any = {
                 courier_last_updated: new Date().toISOString(),
               };
 
-              // Get delivery date
               if (trackingResponse.orderDeliveryDate) {
                 updateData.delivered_at = trackingResponse.orderDeliveryDate;
-                console.log(`📅 Delivery date: ${trackingResponse.orderDeliveryDate}`);
+                console.log(`📅 ${trackingNumber}: ${trackingResponse.orderDeliveryDate}`);
               }
 
-              // Get status
               if (trackingResponse.transactionStatus) {
-                const statusText = POSTEX_STATUS_MAP[trackingResponse.transactionStatus] || trackingResponse.transactionStatus;
+                const statusCode = trackingResponse.transactionStatus;
+                const statusText = POSTEX_STATUS_MAP[statusCode] || statusCode;
                 updateData.courier_api_status = statusText;
-                console.log(`📊 Status: ${statusText} (${trackingResponse.transactionStatus})`);
                 
-                // If delivered, ensure delivered_at is set
-                if (trackingResponse.transactionStatus === '0005' && trackingResponse.orderDeliveryDate) {
+                if (statusCode === '0005' && trackingResponse.orderDeliveryDate) {
                   updateData.delivered_at = trackingResponse.orderDeliveryDate;
-                  console.log(`✅ Marked as DELIVERED`);
+                  console.log(`✅ ${order.order_number} DELIVERED`);
                 }
               }
 
-              console.log('Update data:', JSON.stringify(updateData));
-
-              // Update order
-              console.log(`Updating database for order_id: ${order.order_id}...`);
-              const { data: updateResult, error: updateError } = await supabase
+              const { error } = await supabase
                 .from('shopify_orders')
                 .update(updateData)
-                .eq('order_id', order.order_id)
-                .select();
+                .eq('order_id', order.order_id);
 
-              if (updateError) {
-                console.error(`❌ Error updating ${order.order_number}:`, updateError);
-              } else {
+              if (!error) {
                 updatedCount++;
-                console.log(`✅ Successfully updated ${order.order_number}`);
-                console.log('Update result:', updateResult);
+                console.log(`✅ Updated ${order.order_number}`);
               }
             }
-          } else {
-            console.log('⚠️ PostEx API returned unsuccessful status or no data');
           }
         } else {
           const errorText = await postexResponse.text();
-          console.error('PostEx API error response:', errorText);
+          console.error(`❌ PostEx error ${postexResponse.status}:`, errorText);
         }
-      } catch (postexError) {
-        console.error('PostEx API exception:', postexError);
+      } catch (error) {
+        console.error('❌ PostEx exception:', error);
       }
     }
 
