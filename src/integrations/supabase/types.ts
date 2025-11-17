@@ -167,6 +167,8 @@ export type Database = {
       conversation_context: {
         Row: {
           ai_enabled: boolean | null
+          assigned_agent: string | null
+          avg_response_time: unknown
           awaiting_response: string | null
           chat_status: string | null
           context_data: Json | null
@@ -174,13 +176,16 @@ export type Database = {
           customer_name: string | null
           escalated: boolean | null
           human_replied_at: string | null
+          is_priority: boolean | null
           last_intent: string | null
           last_message_at: string | null
           last_product_list: Json | null
           last_product_viewed: string | null
+          last_response_time: string | null
           phone_number: string
           resolved: boolean | null
           status: string | null
+          tags: string[] | null
           taken_over_at: string | null
           taken_over_by: string | null
           thread_id: string | null
@@ -188,6 +193,8 @@ export type Database = {
         }
         Insert: {
           ai_enabled?: boolean | null
+          assigned_agent?: string | null
+          avg_response_time?: unknown
           awaiting_response?: string | null
           chat_status?: string | null
           context_data?: Json | null
@@ -195,13 +202,16 @@ export type Database = {
           customer_name?: string | null
           escalated?: boolean | null
           human_replied_at?: string | null
+          is_priority?: boolean | null
           last_intent?: string | null
           last_message_at?: string | null
           last_product_list?: Json | null
           last_product_viewed?: string | null
+          last_response_time?: string | null
           phone_number: string
           resolved?: boolean | null
           status?: string | null
+          tags?: string[] | null
           taken_over_at?: string | null
           taken_over_by?: string | null
           thread_id?: string | null
@@ -209,6 +219,8 @@ export type Database = {
         }
         Update: {
           ai_enabled?: boolean | null
+          assigned_agent?: string | null
+          avg_response_time?: unknown
           awaiting_response?: string | null
           chat_status?: string | null
           context_data?: Json | null
@@ -216,13 +228,16 @@ export type Database = {
           customer_name?: string | null
           escalated?: boolean | null
           human_replied_at?: string | null
+          is_priority?: boolean | null
           last_intent?: string | null
           last_message_at?: string | null
           last_product_list?: Json | null
           last_product_viewed?: string | null
+          last_response_time?: string | null
           phone_number?: string
           resolved?: boolean | null
           status?: string | null
+          tags?: string[] | null
           taken_over_at?: string | null
           taken_over_by?: string | null
           thread_id?: string | null
