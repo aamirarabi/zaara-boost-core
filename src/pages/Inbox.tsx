@@ -75,11 +75,20 @@ const Inbox = () => {
             .limit(1)
             .single();
           
+          // Count unread messages
+          const { count: unreadCount } = await supabase
+            .from("chat_history")
+            .select("*", { count: 'exact', head: true })
+            .eq("phone_number", conv.phone_number)
+            .eq("direction", "inbound")
+            .neq("status", "read");
+          
           return {
             ...conv,
             customer_name: contextData?.customer_name || null,
             last_message: lastMsg?.content || "",
-            last_message_time: lastMsg?.created_at || conv.created_at
+            last_message_time: lastMsg?.created_at || conv.created_at,
+            unread_count: unreadCount || 0
           };
         })
       );
@@ -326,8 +335,8 @@ const Inbox = () => {
         </div>
 
         <div className="flex h-[calc(100vh-12rem)] gap-4">
-          {/* Left: Conversations (25%) */}
-          <div className="w-1/4 border-r">
+          {/* Left: Conversations (28%) */}
+          <div className="w-[28%] border-r bg-white rounded-lg flex flex-col">
             <ScrollArea className="h-full bg-gray-50 rounded-lg">{" "}
               <div className="p-4 space-y-2">
                 {conversations.map((conv) => {
@@ -365,6 +374,16 @@ const Inbox = () => {
                             {getInitials(conv.customer_name, conv.phone_number)}
                           </AvatarFallback>
                         </Avatar>
+                        
+                        {/* Unread badge */}
+                        {conv.unread_count > 0 && (
+                          <div className="absolute -top-1 -right-1">
+                            <div className="h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full font-semibold">
+                              {conv.unread_count}
+                            </div>
+                          </div>
+                        )}
+                        
                         {/* Online status indicator - show if message within last 5 mins */}
                         {new Date(conv.last_message_time).getTime() > Date.now() - 5 * 60 * 1000 && (
                           <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-background"></div>
@@ -378,7 +397,11 @@ const Inbox = () => {
                           </span>
                         </div>
                         <p className="text-sm opacity-80 truncate">
-                          {conv.last_message || "No messages yet"}
+                          {conv.last_message 
+                            ? conv.last_message.length > 60 
+                              ? conv.last_message.substring(0, 60) + "..." 
+                              : conv.last_message
+                            : "No messages yet"}
                         </p>
                       </div>
                       <Button
@@ -400,7 +423,7 @@ const Inbox = () => {
           </div>
 
           {/* Middle: Chat (42%) */}
-          <div className="flex-1 flex flex-col bg-white rounded-lg border">
+          <div className="w-[42%] flex flex-col bg-white rounded-lg border">
             {selectedPhone ? (
               <>
                 <div className="p-4 border-b flex justify-between items-center">
@@ -512,8 +535,8 @@ const Inbox = () => {
             )}
           </div>
 
-          {/* Right: Customer Intelligence (33%) */}
-          <div className="w-1/3 border-l bg-white rounded-lg overflow-y-auto">
+          {/* Right: Customer Intelligence (30%) */}
+          <div className="w-[30%] border-l bg-white rounded-lg overflow-y-auto">
             {selectedPhone ? (
               <CustomerIntelligencePanel phoneNumber={selectedPhone} />
             ) : (
