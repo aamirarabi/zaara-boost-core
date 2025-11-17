@@ -87,6 +87,30 @@ async function processBatch(supabaseClient: any, orders: any[]) {
           }
         : null;
 
+      // Get fulfillment dates
+      let fulfilledAt = null;
+      let dispatchedAt = null;
+      
+      if (fulfillments.length > 0) {
+        const fulfillment = fulfillments[0];
+        if (fulfillment.created_at) {
+          fulfilledAt = fulfillment.created_at;
+          dispatchedAt = fulfillment.created_at;
+        }
+      }
+
+      // Get shipping lines for courier info
+      let courierName = tracking?.company || null;
+      if (!courierName && o.shipping_lines && o.shipping_lines.length > 0) {
+        courierName = o.shipping_lines[0].title || null;
+      }
+
+      // Determine delivery city
+      let deliveryCity = null;
+      if (o.shipping_address && o.shipping_address.city) {
+        deliveryCity = o.shipping_address.city;
+      }
+
       orderMap.set(orderId, {
         order_id: orderId,
         shopify_id: orderId,
@@ -108,7 +132,10 @@ async function processBatch(supabaseClient: any, orders: any[]) {
         billing_address: o.billing_address || {},
         tracking_number: tracking?.number || null,
         tracking_url: tracking?.url || null,
-        courier_name: tracking?.company || null,
+        courier_name: courierName,
+        delivery_city: deliveryCity,
+        fulfilled_at: fulfilledAt,
+        dispatched_at: dispatchedAt,
         note: o.note,
         tags: o.tags?.split(',').map((t: string) => t.trim()) || [],
         created_at: o.created_at,

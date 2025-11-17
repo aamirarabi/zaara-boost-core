@@ -800,6 +800,7 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
+          delivered_at: string | null
           delivered_to_name: string | null
           delivered_to_relation: string | null
           delivery_notes: string | null
@@ -808,6 +809,7 @@ export type Database = {
           dispatched_at: string | null
           estimated_delivery_date: string | null
           financial_status: string | null
+          fulfilled_at: string | null
           fulfillment_status: string | null
           line_items: Json | null
           note: string | null
@@ -840,6 +842,7 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          delivered_at?: string | null
           delivered_to_name?: string | null
           delivered_to_relation?: string | null
           delivery_notes?: string | null
@@ -848,6 +851,7 @@ export type Database = {
           dispatched_at?: string | null
           estimated_delivery_date?: string | null
           financial_status?: string | null
+          fulfilled_at?: string | null
           fulfillment_status?: string | null
           line_items?: Json | null
           note?: string | null
@@ -880,6 +884,7 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          delivered_at?: string | null
           delivered_to_name?: string | null
           delivered_to_relation?: string | null
           delivery_notes?: string | null
@@ -888,6 +893,7 @@ export type Database = {
           dispatched_at?: string | null
           estimated_delivery_date?: string | null
           financial_status?: string | null
+          fulfilled_at?: string | null
           fulfillment_status?: string | null
           line_items?: Json | null
           note?: string | null
