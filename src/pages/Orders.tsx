@@ -772,9 +772,9 @@ const Orders = () => {
                   <TableHead>Items</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Total</TableHead>
+                  <TableHead>SLA ETA</TableHead>
+                  <TableHead>Delivered</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>ETA (SLA)</TableHead>
-                  <TableHead>Delay</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -792,24 +792,44 @@ const Orders = () => {
                     ? new Date(order.dispatched_at).toLocaleDateString('en-GB')
                     : '—';
                   
+                  const deliveredDate = order.delivered_at
+                    ? new Date(order.delivered_at).toLocaleString('en-GB', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : '—';
+                  
                   // Calculate ETA based on SLA (2 days Karachi, 5 days other)
-                  let eta = '—';
-                  let delayDays = null;
+                  let slaEta = '—';
+                  let delayDays: number | null = null;
+                  let delayDisplay = '';
                   
                   if (order.dispatched_at) {
                     const dispatch = new Date(order.dispatched_at);
                     const isKarachi = city.toLowerCase().includes('karachi');
                     const slaDays = isKarachi ? 2 : 5;
                     
-                    const etaDate = new Date(dispatch);
-                    etaDate.setDate(etaDate.getDate() + slaDays);
-                    eta = etaDate.toLocaleDateString('en-GB');
+                    // Calculate SLA ETA
+                    const slaDate = new Date(dispatch);
+                    slaDate.setDate(slaDate.getDate() + slaDays);
+                    slaEta = slaDate.toLocaleDateString('en-GB');
                     
                     // Calculate delay if delivered
                     if (order.delivered_at) {
                       const delivered = new Date(order.delivered_at);
-                      const diffTime = delivered.getTime() - etaDate.getTime();
+                      const diffTime = delivered.getTime() - slaDate.getTime();
                       delayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      
+                      if (delayDays < 0) {
+                        delayDisplay = `${Math.abs(delayDays)}d Early`;
+                      } else if (delayDays === 0) {
+                        delayDisplay = 'On-Time';
+                      } else {
+                        delayDisplay = `${delayDays}d Late`;
+                      }
                     }
                   }
                   
@@ -860,25 +880,23 @@ const Orders = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{formatPKRCurrency(order.total_price)}</TableCell>
+                      <TableCell className="text-sm">{slaEta}</TableCell>
+                      <TableCell className="text-sm font-medium">{deliveredDate}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusColor(order.fulfillment_status)}>
-                          {order.delivered_at ? 'Delivered' : order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{eta}</TableCell>
-                      <TableCell>
-                        {delayDays !== null ? (
-                          <span className={`font-medium text-sm ${
-                            delayDays < 0 
-                              ? 'text-green-600'
+                        {delayDisplay ? (
+                          <Badge className={
+                            delayDays! < 0 
+                              ? 'bg-green-100 text-green-800 hover:bg-green-100'
                               : delayDays === 0
-                              ? 'text-blue-600'
-                              : 'text-red-600'
-                          }`}>
-                            {delayDays < 0 ? `${Math.abs(delayDays)}d Early` : delayDays === 0 ? 'On-Time' : `${delayDays}d Late`}
-                          </span>
+                              ? 'bg-blue-100 text-blue-800 hover:bg-blue-100'
+                              : 'bg-red-100 text-red-800 hover:bg-red-100'
+                          }>
+                            {delayDisplay}
+                          </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
+                          <Badge variant={getStatusColor(order.fulfillment_status)}>
+                            {order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
+                          </Badge>
                         )}
                       </TableCell>
                     </TableRow>
