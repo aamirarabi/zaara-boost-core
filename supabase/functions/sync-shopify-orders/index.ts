@@ -48,9 +48,9 @@ function normalizeCourierName(courierName: string | null): string | null {
   return courierName;
 }
 
-// Extract order source from Shopify data
+// Extract order source from Shopify data (Facebook Ads, Google Ads, etc.)
 function extractOrderSource(order: any): string {
-  // Check referring site first (e.g., "facebook.com", "google.com")
+  // Check referring site first
   if (order.referring_site) {
     const referring = order.referring_site.toLowerCase();
     if (referring.includes('facebook') || referring.includes('fb.com')) return 'Facebook Ads';
@@ -81,7 +81,6 @@ function extractOrderSource(order: any): string {
     if (source !== 'web') return order.source_name;
   }
 
-  // Default to Organic
   return 'Organic';
 }
 
