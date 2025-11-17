@@ -31,6 +31,60 @@ function standardizePhone(phone: string): string | null {
   return null;
 }
 
+// Normalize courier name (Pakistan-specific)
+function normalizeCourierName(courierName: string | null): string | null {
+  if (!courierName) return null;
+  
+  const courier = courierName.toLowerCase().trim();
+  
+  // Map "Other" to PostEx (common in Pakistan)
+  if (courier === 'other') return 'PostEx';
+  if (courier === 'postex' || courier === 'post ex') return 'PostEx';
+  if (courier === 'leopards' || courier === 'leopard') return 'Leopards';
+  if (courier === 'tcs') return 'TCS';
+  if (courier === 'blueex' || courier === 'blue ex') return 'BlueEx';
+  
+  // Return original if no mapping found
+  return courierName;
+}
+
+// Extract order source from Shopify data
+function extractOrderSource(order: any): string {
+  // Check referring site first (e.g., "facebook.com", "google.com")
+  if (order.referring_site) {
+    const referring = order.referring_site.toLowerCase();
+    if (referring.includes('facebook') || referring.includes('fb.com')) return 'Facebook Ads';
+    if (referring.includes('instagram') || referring.includes('ig.me')) return 'Instagram';
+    if (referring.includes('google')) return 'Google Ads';
+    if (referring.includes('tiktok')) return 'TikTok';
+    if (referring.includes('youtube')) return 'YouTube';
+  }
+
+  // Check landing site for UTM parameters
+  if (order.landing_site) {
+    const landing = order.landing_site.toLowerCase();
+    if (landing.includes('utm_source=facebook') || landing.includes('fbclid=')) return 'Facebook Ads';
+    if (landing.includes('utm_source=instagram')) return 'Instagram';
+    if (landing.includes('utm_source=google') || landing.includes('gclid=')) return 'Google Ads';
+    if (landing.includes('utm_source=tiktok')) return 'TikTok';
+    if (landing.includes('utm_source=youtube')) return 'YouTube';
+    if (landing.includes('utm_medium=social')) return 'Social Media';
+    if (landing.includes('utm_medium=cpc') || landing.includes('utm_medium=ppc')) return 'Paid Ads';
+  }
+
+  // Check source_name as fallback
+  if (order.source_name) {
+    const source = order.source_name.toLowerCase();
+    if (source.includes('facebook')) return 'Facebook Ads';
+    if (source.includes('instagram')) return 'Instagram';
+    if (source.includes('google')) return 'Google Ads';
+    if (source !== 'web') return order.source_name;
+  }
+
+  // Default to Organic
+  return 'Organic';
+}
+
 // Helper to transform and insert orders
 async function processBatch(supabaseClient: any, orders: any[]) {
   // First, ensure all customers exist - DEDUPLICATE by phone_number
@@ -104,12 +158,18 @@ async function processBatch(supabaseClient: any, orders: any[]) {
       if (!courierName && o.shipping_lines && o.shipping_lines.length > 0) {
         courierName = o.shipping_lines[0].title || null;
       }
+      
+      // Normalize courier name (Other → PostEx)
+      courierName = normalizeCourierName(courierName);
 
       // Determine delivery city
       let deliveryCity = null;
       if (o.shipping_address && o.shipping_address.city) {
         deliveryCity = o.shipping_address.city;
       }
+      
+      // Extract order source
+      const orderSource = extractOrderSource(o);
 
       orderMap.set(orderId, {
         order_id: orderId,
@@ -136,6 +196,7 @@ async function processBatch(supabaseClient: any, orders: any[]) {
         delivery_city: deliveryCity,
         fulfilled_at: fulfilledAt,
         dispatched_at: dispatchedAt,
+        order_source: orderSource,
         note: o.note,
         tags: o.tags?.split(',').map((t: string) => t.trim()) || [],
         created_at: o.created_at,

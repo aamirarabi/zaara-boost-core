@@ -128,9 +128,25 @@ const Orders = () => {
   };
 
   const loadCourierStats = async () => {
+    // First, get courier SLA settings from database
+    const { data: courierSettings } = await supabase
+      .from("courier_settings")
+      .select("courier_name, sla_days_karachi, sla_days_other");
+
+    // Create SLA map for quick lookup
+    const slaMap: Record<string, { karachi: number; other: number }> = {};
+    if (courierSettings) {
+      courierSettings.forEach((setting) => {
+        slaMap[setting.courier_name] = {
+          karachi: setting.sla_days_karachi || 2,
+          other: setting.sla_days_other || 5,
+        };
+      });
+    }
+
     const { data: courierData } = await supabase
       .from("shopify_orders")
-      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status, created_at, shipping_address, dispatched_at")
+      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status, created_at, shipping_address, dispatched_at, delivery_city")
       .not("courier_name", "is", null);
 
     if (!courierData) return;
@@ -150,6 +166,7 @@ const Orders = () => {
           late: 0,
           totalDelayDays: 0,
           delivered: 0,
+          pending: 0,
         };
       }
       
@@ -162,11 +179,15 @@ const Orders = () => {
         const actual = new Date(order.actual_delivery_date);
         const dispatched = new Date(order.dispatched_at);
         const shippingAddress = order.shipping_address as any;
-        const city = shippingAddress?.city?.toLowerCase() || "";
+        const city = (order.delivery_city || shippingAddress?.city || "").toLowerCase();
         const isKarachi = city.includes("karachi");
         
-        // Get expected delivery days from settings (Karachi: 2 days, Outside: 5 days)
-        const expectedDays = isKarachi ? 2 : 5;
+        // Get SLA days from database settings (flexible - you can change anytime!)
+        const courierSLA = slaMap[courier];
+        const expectedDays = isKarachi 
+          ? (courierSLA?.karachi || 2)  // Default 2 days for Karachi
+          : (courierSLA?.other || 5);    // Default 5 days for other cities
+        
         const expectedDelivery = new Date(dispatched);
         expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
         
@@ -180,6 +201,8 @@ const Orders = () => {
           statsMap[courier].late++;
           statsMap[courier].totalDelayDays += diffDays;
         }
+      } else {
+        statsMap[courier].pending++;
       }
     });
 
@@ -218,6 +241,30 @@ const Orders = () => {
     }
 
     setSyncing(false);
+  };
+
+  const updateCourierTracking = async () => {
+    try {
+      toast("Updating Tracking", {
+        description: "Fetching latest delivery status from couriers...",
+      });
+
+      const { data, error } = await supabase.functions.invoke("update-courier-tracking");
+
+      if (error) throw error;
+
+      toast("Tracking Updated", {
+        description: `${data.trackedCount} orders tracked, ${data.deliveredCount} delivered`,
+      });
+
+      loadOrders();
+      loadStats();
+      loadCourierStats();
+    } catch (error: any) {
+      toast("Tracking Update Failed", {
+        description: error.message,
+      });
+    }
   };
 
   const exportToPDF = async () => {
@@ -611,6 +658,11 @@ const Orders = () => {
                   Sync from Shopify
                 </>
               )}
+            </Button>
+            
+            <Button onClick={updateCourierTracking} variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-50">
+              <Truck className="mr-2 h-4 w-4" />
+              Update Tracking
             </Button>
           </div>
         </div>

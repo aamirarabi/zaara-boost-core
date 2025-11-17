@@ -302,6 +302,8 @@ export type Database = {
           is_active: boolean | null
           karachi_delivery_days: number | null
           outside_karachi_delivery_days: number | null
+          sla_days_karachi: number | null
+          sla_days_other: number | null
           updated_at: string | null
         }
         Insert: {
@@ -315,6 +317,8 @@ export type Database = {
           is_active?: boolean | null
           karachi_delivery_days?: number | null
           outside_karachi_delivery_days?: number | null
+          sla_days_karachi?: number | null
+          sla_days_other?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -328,6 +332,8 @@ export type Database = {
           is_active?: boolean | null
           karachi_delivery_days?: number | null
           outside_karachi_delivery_days?: number | null
+          sla_days_karachi?: number | null
+          sla_days_other?: number | null
           updated_at?: string | null
         }
         Relationships: []
@@ -803,6 +809,7 @@ export type Database = {
           delivered_at: string | null
           delivered_to_name: string | null
           delivered_to_relation: string | null
+          delivery_city: string | null
           delivery_notes: string | null
           delivery_proof_url: string | null
           delivery_status: string | null
@@ -845,6 +852,7 @@ export type Database = {
           delivered_at?: string | null
           delivered_to_name?: string | null
           delivered_to_relation?: string | null
+          delivery_city?: string | null
           delivery_notes?: string | null
           delivery_proof_url?: string | null
           delivery_status?: string | null
@@ -887,6 +895,7 @@ export type Database = {
           delivered_at?: string | null
           delivered_to_name?: string | null
           delivered_to_relation?: string | null
+          delivery_city?: string | null
           delivery_notes?: string | null
           delivery_proof_url?: string | null
           delivery_status?: string | null
