@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     console.log(`📮 PostEx orders: ${postexOrders.length}`);
     console.log(`🐆 Leopards orders: ${leopardsOrders.length}`);
 
-    // ===== POSTEX TRACKING =====
+    // ===== POSTEX TRACKING (OFFICIAL API v4.1.9 SPEC) =====
     if (postexOrders.length > 0) {
       console.log(`\n📮 Starting PostEx tracking for ${postexOrders.length} orders...`);
       
@@ -89,11 +89,13 @@ Deno.serve(async (req) => {
       console.log('PostEx tracking numbers:', trackingNumbers.slice(0, 5), '...');
       
       try {
-        console.log('Calling PostEx API...');
+        console.log('Calling PostEx API (GET method with JSON body per official docs)...');
+        
+        // OFFICIAL SPEC: GET method with JSON body containing trackingNumber array
         const postexResponse = await fetch(
           'https://api.postex.pk/services/integration/api/order/v1/track-bulk-order',
           {
-            method: 'POST',
+            method: 'GET',
             headers: {
               'Content-Type': 'application/json',
               'token': postexToken,
