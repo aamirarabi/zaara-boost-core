@@ -72,6 +72,12 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 40 5% 18%;
     --sidebar-ring: 45 98% 49%;
+    
+    /* Boost Colors */
+    --boost-yellow: 43 96% 56%;
+    --boost-amber: 38 92% 50%;
+    --boost-gold: 45 93% 47%;
+    --boost-black: 0 0% 9%;
   }
 
   .dark {
@@ -144,6 +150,14 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+
+  .story-link * {
+    @apply relative inline-block after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-0 after:left-0 after:bg-primary after:origin-bottom-right after:transition-transform after:duration-300 hover:after:scale-x-100 hover:after:origin-bottom-left;
+  }
+
+  .dark .story-link * {
+    color: hsl(var(--primary-foreground));
+  }
 }
 
 @layer utilities {
@@ -182,4 +196,92 @@ All colors MUST be HSL.
   .gradient-subtle {
     background: var(--gradient-subtle);
   }
+}
+
+/* Premium Shadows */
+.shadow-premium {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-premium-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+              0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Smooth Hover Effects */
+.hover-lift {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.12),
+              0 8px 16px -4px rgba(0, 0, 0, 0.08);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Message Animations */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* Better Typography */
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Consistent Spacing */
+.space-comfortable > * + * {
+  margin-top: 1rem;
+}
+
+/* Better Line Heights */
+.leading-comfortable {
+  line-height: 1.6;
 }

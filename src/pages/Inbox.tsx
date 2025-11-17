@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Send, Trash2, Download, Trash } from "lucide-react";
+import { Send, Trash2, Download, Trash, Phone, Search, Star, MessageSquare, Clock } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerIntelligencePanel } from "@/components/inbox/CustomerIntelligencePanel";
 import { QuickReplies } from "@/components/inbox/QuickReplies";
 import { toast } from "sonner";
@@ -31,15 +32,38 @@ const Inbox = () => {
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [phoneToDelete, setPhoneToDelete] = useState<string | null>(null);
   const [isZaaraTyping, setIsZaaraTyping] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [starredChats, setStarredChats] = useState<string[]>([]);
+  const [filter, setFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadConversations();
+    loadStarredChats();
 
     const channel = supabase
       .channel("chat_history")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_history" }, () => {
+      .on("postgres_changes", { 
+        event: "INSERT", 
+        schema: "public", 
+        table: "chat_history" 
+      }, (payload) => {
         loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone);
+        
+        // If message is for current chat
+        if (payload.new.phone_number === selectedPhone) {
+          // If outbound from human, show Zaara typing
+          if (payload.new.direction === "outbound" && payload.new.sent_by === "human") {
+            setIsZaaraTyping(true);
+          }
+          
+          // If inbound (Zaara response), hide typing
+          if (payload.new.direction === "inbound" || payload.new.sent_by === "ai") {
+            setIsZaaraTyping(false);
+          }
+          
+          loadMessages(selectedPhone);
+        }
       })
       .subscribe();
 
@@ -49,6 +73,7 @@ const Inbox = () => {
   }, [selectedPhone]);
 
   const loadConversations = async () => {
+    setLoading(true);
     const { data } = await supabase
       .from("chat_history")
       .select("phone_number, created_at, content")
@@ -57,7 +82,6 @@ const Inbox = () => {
     if (data) {
       const uniquePhones = Array.from(new Map(data.map((item) => [item.phone_number, item])).values());
       
-      // Fetch customer names and last message
       const conversationsWithNames = await Promise.all(
         uniquePhones.map(async (conv) => {
           const { data: contextData } = await supabase
@@ -66,7 +90,6 @@ const Inbox = () => {
             .eq("phone_number", conv.phone_number)
             .maybeSingle();
           
-          // Get last message
           const { data: lastMsg } = await supabase
             .from("chat_history")
             .select("content, created_at")
@@ -75,7 +98,6 @@ const Inbox = () => {
             .limit(1)
             .single();
           
-          // Count unread messages
           const { count: unreadCount } = await supabase
             .from("chat_history")
             .select("*", { count: 'exact', head: true })
@@ -94,6 +116,18 @@ const Inbox = () => {
       );
       
       setConversations(conversationsWithNames);
+    }
+    setLoading(false);
+  };
+
+  const loadStarredChats = async () => {
+    const { data } = await supabase
+      .from("conversation_context")
+      .select("phone_number, is_priority")
+      .eq("is_priority", true);
+    
+    if (data) {
+      setStarredChats(data.map(d => d.phone_number));
     }
   };
 
@@ -115,8 +149,6 @@ const Inbox = () => {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone) return;
 
-    setIsZaaraTyping(true);
-
     const { error } = await supabase.from("chat_history").insert({
       phone_number: selectedPhone,
       content: newMessage,
@@ -129,13 +161,26 @@ const Inbox = () => {
     if (!error) {
       setNewMessage("");
       loadMessages(selectedPhone);
-      
-      // Simulate waiting for Zaara response
-      setTimeout(() => {
-        setIsZaaraTyping(false);
-      }, 3000);
-    } else {
-      setIsZaaraTyping(false);
+      // Typing indicator managed by real-time subscription
+    }
+  };
+
+  const toggleStarChat = async (phone: string) => {
+    const isStarred = starredChats.includes(phone);
+    
+    const { error } = await supabase
+      .from("conversation_context")
+      .update({ is_priority: !isStarred })
+      .eq("phone_number", phone);
+    
+    if (!error) {
+      if (isStarred) {
+        setStarredChats(prev => prev.filter(p => p !== phone));
+        toast.success("Removed from priority");
+      } else {
+        setStarredChats(prev => [...prev, phone]);
+        toast.success("Marked as priority");
+      }
     }
   };
 
@@ -337,9 +382,58 @@ const Inbox = () => {
         <div className="flex h-[calc(100vh-12rem)] gap-4">
           {/* Left: Conversations (28%) */}
           <div className="w-[28%] border-r bg-white rounded-lg flex flex-col">
-            <ScrollArea className="h-full bg-gray-50 rounded-lg">{" "}
-              <div className="p-4 space-y-2">
-                {conversations.map((conv) => {
+            {/* Filter Tabs */}
+            <div className="px-4 py-3 border-b bg-white">
+              <div className="flex gap-2">
+                <Button
+                  variant={filter === "all" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setFilter("all")}
+                  className="text-xs transition-all"
+                >
+                  All ({conversations.length})
+                </Button>
+                <Button
+                  variant={filter === "unread" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setFilter("unread")}
+                  className="text-xs transition-all"
+                >
+                  Unread ({conversations.filter(c => c.unread_count > 0).length})
+                </Button>
+                <Button
+                  variant={filter === "starred" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setFilter("starred")}
+                  className="text-xs transition-all"
+                >
+                  ⭐ Priority ({starredChats.length})
+                </Button>
+              </div>
+            </div>
+
+            <ScrollArea className="h-full bg-gray-50 rounded-lg">
+              {loading ? (
+                <div className="p-4 space-y-3">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="flex gap-3 p-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 space-y-2">
+                {conversations
+                  .filter(conv => {
+                    if (filter === "unread") return conv.unread_count > 0;
+                    if (filter === "starred") return starredChats.includes(conv.phone_number);
+                    return true;
+                  })
+                  .map((conv) => {
                   const getInitials = (name: string | null, phone: string) => {
                     if (name) {
                       return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -361,14 +455,18 @@ const Inbox = () => {
                   return (
                     <div
                       key={conv.phone_number}
-                      className={`flex items-start gap-3 p-3 rounded-lg transition-all cursor-pointer group ${
+                      className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer group hover-lift shadow-premium ${
                         selectedPhone === conv.phone_number
-                          ? "bg-primary text-primary-foreground shadow-md"
-                          : "hover:bg-muted hover:shadow-sm"
+                          ? "bg-primary text-primary-foreground shadow-premium-lg"
+                          : "hover:bg-muted"
                       }`}
                       onClick={() => handleSelectConversation(conv.phone_number)}
                     >
                       <div className="relative">
+                        {/* Status ring overlay */}
+                        {new Date(conv.last_message_time).getTime() > Date.now() - 5 * 60 * 1000 && (
+                          <div className="absolute inset-0 rounded-full border-2 border-green-500 animate-pulse" />
+                        )}
                         <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
                           <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white font-semibold">
                             {getInitials(conv.customer_name, conv.phone_number)}
@@ -404,21 +502,39 @@ const Inbox = () => {
                             : "No messages yet"}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openDeleteDialog(conv.phone_number);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleStarChat(conv.phone_number);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        >
+                          <Star className={`h-4 w-4 transition-colors ${
+                            starredChats.includes(conv.phone_number) 
+                              ? 'fill-yellow-400 text-yellow-400' 
+                              : 'text-gray-400 hover:text-yellow-400'
+                          }`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteDialog(conv.phone_number);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              )}
             </ScrollArea>
           </div>
 
@@ -439,7 +555,17 @@ const Inbox = () => {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => window.open(`https://wa.me/${selectedPhone}`, '_blank')}
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+                      title="Call on WhatsApp"
+                    >
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => downloadChat(selectedPhone)}
+                      className="hover:bg-gray-100 transition-colors"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -447,26 +573,64 @@ const Inbox = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => openDeleteDialog(selectedPhone)}
+                      className="hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
 
+                {/* Search Box */}
+                <div className="px-4 py-2 border-b bg-gray-50">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search messages..."
+                      className="pl-9 h-9 text-sm"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm("")}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <ScrollArea className="flex-1 p-4">
                   <div className="space-y-4">
-                    {messages.map((msg) => (
+                    {messages
+                      .filter(msg => 
+                        searchTerm === "" || 
+                        msg.content.toLowerCase().includes(searchTerm.toLowerCase())
+                      )
+                      .map((msg) => (
                       <div
                         key={msg.id}
-                        className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                        className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"} ${
+                          msg.direction === "outbound" ? "animate-slide-in-right" : "animate-slide-in-left"
+                        }`}
                       >
-                         <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
-                            msg.direction === "outbound"
-                              ? "bg-gradient-to-r from-boost-yellow to-boost-amber text-boost-black"
-                              : "bg-muted"
-                          }`}
-                        >
+                        <div className="relative">
+                          {/* Message tail */}
+                          <div 
+                            className={`absolute top-3 w-0 h-0 ${
+                              msg.direction === "outbound"
+                                ? "right-[-6px] border-l-[8px] border-l-boost-amber border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent"
+                                : "left-[-6px] border-r-[8px] border-r-gray-100 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent"
+                            }`}
+                          />
+                          <div
+                            className={`max-w-[70%] rounded-lg p-3 ${
+                              msg.direction === "outbound"
+                                ? "bg-gradient-to-r from-boost-yellow to-boost-amber text-boost-black"
+                                : "bg-gray-100"
+                            }`}
+                          >
                           <div className="whitespace-pre-wrap break-words">
                             {msg.content.split('\n').map((line: string, i: number) => {
                               // Handle bold text
@@ -483,14 +647,28 @@ const Inbox = () => {
                               );
                             })}
                           </div>
-                          {msg.media_url && (
-                            <div className="mt-2">
-                              <img src={msg.media_url} alt="Media" className="rounded max-w-full h-auto" />
-                            </div>
-                          )}
-                          <p className="text-xs opacity-70 mt-1">
-                            {new Date(msg.created_at).toLocaleTimeString()}
-                          </p>
+                            {msg.media_url && (
+                              <div className="mt-2">
+                                <img src={msg.media_url} alt="Media" className="rounded max-w-full h-auto" />
+                              </div>
+                            )}
+                            {msg.direction === "outbound" && (
+                              <div className="flex items-center justify-end gap-1 mt-1">
+                                {msg.status === "sent" && (
+                                  <span className="text-xs opacity-60">✓</span>
+                                )}
+                                {msg.status === "delivered" && (
+                                  <span className="text-xs opacity-60">✓✓</span>
+                                )}
+                                {msg.status === "read" && (
+                                  <span className="text-xs text-blue-500">✓✓</span>
+                                )}
+                              </div>
+                            )}
+                            <p className="text-xs opacity-70 mt-1">
+                              {new Date(msg.created_at).toLocaleTimeString()}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -499,14 +677,24 @@ const Inbox = () => {
 
                 {/* Typing Indicator */}
                 {isZaaraTyping && (
-                  <div className="px-4 py-2">
-                    <div className="flex items-center gap-2 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg w-fit">
-                      <span className="text-lg">💬</span>
-                      <span className="text-sm font-medium text-gray-700">Zaara is typing</span>
-                      <div className="flex gap-1">
-                        <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
-                        <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
-                        <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+                  <div className="px-4 py-2 animate-slide-in-left">
+                    <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-100 to-blue-100 rounded-lg w-fit shadow-premium">
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center text-white font-semibold">
+                          Z
+                        </div>
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-gray-800">Zaara</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-600">typing</span>
+                          <div className="flex gap-0.5">
+                            <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                            <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -514,16 +702,63 @@ const Inbox = () => {
 
                 <QuickReplies onSelectReply={(text) => setNewMessage(text)} />
 
+                {/* Quick Actions */}
+                <div className="px-4 py-2 border-t bg-gradient-to-r from-gray-50 to-blue-50">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setNewMessage("Can you please share your order number?")}
+                      className="text-xs hover:bg-boost-yellow hover:border-boost-yellow transition-all hover-lift"
+                    >
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Ask Order #
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setNewMessage("Thank you for contacting Boost Lifestyle! How can I assist you today?")}
+                      className="text-xs hover:bg-boost-yellow hover:border-boost-yellow transition-all hover-lift"
+                    >
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Welcome
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setNewMessage("Your issue has been resolved. Is there anything else I can help you with?")}
+                      className="text-xs hover:bg-boost-yellow hover:border-boost-yellow transition-all hover-lift"
+                    >
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Resolved
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setNewMessage("I'll check on this and get back to you shortly!")}
+                      className="text-xs hover:bg-boost-yellow hover:border-boost-yellow transition-all hover-lift"
+                    >
+                      <Clock className="h-3 w-3 mr-1" />
+                      Checking
+                    </Button>
+                  </div>
+                </div>
+
                 <Separator />
 
-                <div className="p-4 flex gap-2">
+                <div className="p-4 flex gap-2 bg-white border-t">
                   <Input
                     placeholder="Type a message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                    onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                    className="flex-1 focus:ring-2 focus:ring-boost-yellow transition-all"
                   />
-                  <Button onClick={handleSendMessage} className="bg-gradient-to-r from-boost-yellow to-boost-amber hover:from-boost-amber hover:to-boost-gold text-boost-black font-semibold">
+                  <Button 
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim()}
+                    className="bg-gradient-to-r from-boost-yellow to-boost-amber hover:from-boost-amber hover:to-boost-gold text-boost-black font-semibold transition-all hover-lift shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
