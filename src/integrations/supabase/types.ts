@@ -719,6 +719,42 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_replies: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          label: string
+          sort_order: number | null
+          text: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          label: string
+          sort_order?: number | null
+          text: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          label?: string
+          sort_order?: number | null
+          text?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       quick_templates: {
         Row: {
           category: string
