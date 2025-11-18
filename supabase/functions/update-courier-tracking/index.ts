@@ -36,23 +36,46 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get all orders with tracking numbers
+    // ===== FETCH ORDERS SEPARATELY BY COURIER =====
     console.log('Fetching orders with tracking numbers...');
-    const { data: orders, error: fetchError } = await supabase
+    
+    // Fetch PostEx orders
+    console.log('Fetching PostEx orders...');
+    const { data: postexOrders, error: postexError } = await supabase
       .from('shopify_orders')
       .select('*')
       .not('tracking_number', 'is', null)
-      .not('courier_name', 'is', null)
-      .limit(50); // Limit to 50 for testing
+      .eq('courier_name', 'PostEx')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-    if (fetchError) {
-      console.error('Error fetching orders:', fetchError);
-      throw new Error(`Error fetching orders: ${fetchError.message}`);
+    if (postexError) {
+      console.error('Error fetching PostEx orders:', postexError);
     }
 
-    console.log(`✅ Found ${orders?.length || 0} orders with tracking info`);
+    // Fetch Leopards orders
+    console.log('Fetching Leopards orders...');
+    const { data: leopardsOrders, error: leopardsError } = await supabase
+      .from('shopify_orders')
+      .select('*')
+      .not('tracking_number', 'is', null)
+      .eq('courier_name', 'Leopards')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-    if (!orders || orders.length === 0) {
+    if (leopardsError) {
+      console.error('Error fetching Leopards orders:', leopardsError);
+    }
+
+    // Combine both courier orders
+    const orders = [
+      ...(postexOrders || []),
+      ...(leopardsOrders || [])
+    ];
+
+    console.log(`✅ Found ${orders.length} total orders (${postexOrders?.length || 0} PostEx, ${leopardsOrders?.length || 0} Leopards)`);
+
+    if (orders.length === 0) {
       console.log('No orders to track, exiting');
       return new Response(
         JSON.stringify({
@@ -66,23 +89,12 @@ Deno.serve(async (req) => {
     }
 
     let updatedCount = 0;
-    const postexOrders: any[] = [];
-    const leopardsOrders: any[] = [];
 
-    // Separate orders by courier
-    for (const order of orders) {
-      if (order.courier_name === 'PostEx') {
-        postexOrders.push(order);
-      } else if (order.courier_name === 'Leopards') {
-        leopardsOrders.push(order);
-      }
-    }
-
-    console.log(`📮 PostEx orders: ${postexOrders.length}`);
-    console.log(`🐆 Leopards orders: ${leopardsOrders.length}`);
+    console.log(`📮 PostEx orders to track: ${postexOrders?.length || 0}`);
+    console.log(`🐆 Leopards orders to track: ${leopardsOrders?.length || 0}`);
 
     // ===== POSTEX TRACKING (INDEPENDENT WITH FALLBACK) =====
-    if (postexOrders.length > 0) {
+    if (postexOrders && postexOrders.length > 0) {
       console.log(`\n📮 Starting PostEx tracking for ${postexOrders.length} orders...`);
       
       const trackingNumbers = postexOrders.map(o => o.tracking_number);
@@ -188,7 +200,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== LEOPARDS TRACKING (INDEPENDENT WITH PER-ORDER PROCESSING) =====
-    if (leopardsOrders.length > 0) {
+    if (leopardsOrders && leopardsOrders.length > 0) {
       console.log(`\n🐆 Starting Leopards tracking for ${leopardsOrders.length} orders...`);
       
       try {
@@ -276,8 +288,8 @@ Deno.serve(async (req) => {
         success: true,
         updatedCount,
         totalOrders: orders.length,
-        postexCount: postexOrders.length,
-        leopardsCount: leopardsOrders.length,
+        postexCount: postexOrders?.length || 0,
+        leopardsCount: leopardsOrders?.length || 0,
         message: `Updated ${updatedCount} orders from courier APIs`,
       }),
       {
