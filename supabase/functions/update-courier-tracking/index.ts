@@ -36,16 +36,24 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ===== FETCH ORDERS SEPARATELY BY COURIER =====
-    console.log('Fetching orders with tracking numbers...');
+    // ===== FETCH ORDERS SEPARATELY BY COURIER (OLDER ORDERS) =====
+    console.log('Fetching orders with tracking numbers (15-60 days old)...');
     
-    // Fetch PostEx orders
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    
     console.log('Fetching PostEx orders...');
     const { data: postexOrders, error: postexError } = await supabase
       .from('shopify_orders')
       .select('*')
       .not('tracking_number', 'is', null)
       .eq('courier_name', 'PostEx')
+      .eq('fulfillment_status', 'fulfilled')
+      .gte('created_at', sixtyDaysAgo.toISOString())
+      .lte('created_at', fifteenDaysAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -53,13 +61,15 @@ Deno.serve(async (req) => {
       console.error('Error fetching PostEx orders:', postexError);
     }
 
-    // Fetch Leopards orders
     console.log('Fetching Leopards orders...');
     const { data: leopardsOrders, error: leopardsError } = await supabase
       .from('shopify_orders')
       .select('*')
       .not('tracking_number', 'is', null)
       .eq('courier_name', 'Leopards')
+      .eq('fulfillment_status', 'fulfilled')
+      .gte('created_at', sixtyDaysAgo.toISOString())
+      .lte('created_at', fifteenDaysAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -67,7 +77,6 @@ Deno.serve(async (req) => {
       console.error('Error fetching Leopards orders:', leopardsError);
     }
 
-    // Combine both courier orders
     const orders = [
       ...(postexOrders || []),
       ...(leopardsOrders || [])
@@ -76,13 +85,12 @@ Deno.serve(async (req) => {
     console.log(`✅ Found ${orders.length} total orders (${postexOrders?.length || 0} PostEx, ${leopardsOrders?.length || 0} Leopards)`);
 
     if (orders.length === 0) {
-      console.log('No orders to track, exiting');
       return new Response(
         JSON.stringify({
           success: true,
           updatedCount: 0,
           totalOrders: 0,
-          message: 'No orders found with tracking numbers',
+          message: 'No orders found in 15-60 day range',
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -90,8 +98,8 @@ Deno.serve(async (req) => {
 
     let updatedCount = 0;
 
-    console.log(`📮 PostEx orders to track: ${postexOrders?.length || 0}`);
-    console.log(`🐆 Leopards orders to track: ${leopardsOrders?.length || 0}`);
+    console.log(`📮 PostEx: ${postexOrders?.length || 0}`);
+    console.log(`🐆 Leopards: ${leopardsOrders?.length || 0}`);
 
     // ===== POSTEX TRACKING (INDEPENDENT WITH FALLBACK) =====
     if (postexOrders && postexOrders.length > 0) {
@@ -199,33 +207,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== LEOPARDS TRACKING (GET METHOD WITH QUERY PARAMS) =====
+    // ===== LEOPARDS TRACKING (GET METHOD) =====
     if (leopardsOrders && leopardsOrders.length > 0) {
-      console.log(`\n🐆 Starting Leopards tracking for ${leopardsOrders.length} orders...`);
+      console.log(`\n🐆 Starting Leopards tracking...`);
       
       try {
-        // Process Leopards orders individually using GET method
         for (const order of leopardsOrders) {
           try {
-            console.log(`\n🐆 Tracking: ${order.tracking_number} (${order.order_number})`);
-            
-            // Use GET method with query parameters (documented method)
             const leopardsUrl = `https://merchantapi.leopardscourier.com/api/trackBookedPacket/format/json/?api_key=${encodeURIComponent(leopardsApiKey)}&api_password=${encodeURIComponent(leopardsApiPassword)}&track_numbers=${encodeURIComponent(order.tracking_number)}`;
             
-            const leopardsResponse = await fetch(leopardsUrl, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            });
-
-            console.log(`📊 Leopards response status: ${leopardsResponse.status}`);
+            const leopardsResponse = await fetch(leopardsUrl, { method: 'GET' });
 
             if (leopardsResponse.ok) {
               const leopardsData = await leopardsResponse.json();
-              console.log(`Response data:`, JSON.stringify(leopardsData).substring(0, 200));
               
-              if (leopardsData.status === 1 && leopardsData.packet_list && leopardsData.packet_list.length > 0) {
+              if (leopardsData.status === 1 && leopardsData.packet_list?.[0]) {
                 const packet = leopardsData.packet_list[0];
                 
                 const updateData: any = {
@@ -234,12 +230,11 @@ Deno.serve(async (req) => {
 
                 if (packet.delivery_date) {
                   updateData.delivered_at = packet.delivery_date;
-                  console.log(`📅 Delivered: ${packet.delivery_date}`);
+                  console.log(`📅 ${order.order_number}: ${packet.delivery_date}`);
                 }
 
                 if (packet.booked_packet_status) {
                   updateData.courier_api_status = packet.booked_packet_status;
-                  console.log(`📊 Status: ${packet.booked_packet_status}`);
                 }
 
                 const { error } = await supabase
@@ -249,32 +244,19 @@ Deno.serve(async (req) => {
 
                 if (!error) {
                   updatedCount++;
-                  console.log(`✅ Leopards: ${order.order_number}`);
-                } else {
-                  console.error(`⚠️ DB update error:`, error);
+                  console.log(`✅ ${order.order_number}`);
                 }
-              } else {
-                console.log(`⚠️ No tracking data for ${order.tracking_number}`);
-                console.log(`Full response:`, JSON.stringify(leopardsData));
               }
-            } else {
-              const errorText = await leopardsResponse.text();
-              console.error(`⚠️ Leopards API error ${leopardsResponse.status}`);
-              console.error(`Error:`, errorText.substring(0, 300));
             }
             
-            // Small delay between requests
             await new Promise(resolve => setTimeout(resolve, 100));
             
-          } catch (orderError) {
-            console.error(`⚠️ Error tracking ${order.tracking_number}:`, orderError);
+          } catch (err) {
+            console.error(`⚠️ ${order.order_number}:`, err);
           }
         }
-        
-        console.log(`🐆 Leopards tracking complete`);
-        
-      } catch (leopardsError) {
-        console.error('❌ Leopards tracking failed:', leopardsError);
+      } catch (error) {
+        console.error('❌ Leopards error:', error);
       }
     }
 
