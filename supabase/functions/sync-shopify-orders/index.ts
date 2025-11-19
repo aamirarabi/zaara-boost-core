@@ -10,6 +10,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Calculate scheduled delivery date based on dispatch and city
+function calculateScheduledDelivery(dispatchDate: string, city: string): string {
+  const dispatch = new Date(dispatchDate);
+  const cityLower = city?.toLowerCase() || '';
+  const isKarachi = cityLower.includes('karachi');
+  const slaDays = isKarachi ? 2 : 5;
+  
+  const scheduled = new Date(dispatch);
+  scheduled.setDate(scheduled.getDate() + slaDays);
+  return scheduled.toISOString();
+}
+
 // Standardize Pakistani phone numbers to format: 923218241590
 function standardizePhone(phone: string): string | null {
   if (!phone) return null;
@@ -170,6 +182,12 @@ async function processBatch(supabaseClient: any, orders: any[]) {
       // Extract order source
       const orderSource = extractOrderSource(o);
 
+      // Calculate scheduled_delivery_date if order is fulfilled
+      let scheduledDeliveryDate = null;
+      if (fulfillments.length > 0 && dispatchedAt && deliveryCity) {
+        scheduledDeliveryDate = calculateScheduledDelivery(dispatchedAt, deliveryCity);
+      }
+
       orderMap.set(orderId, {
         order_id: orderId,
         shopify_id: orderId,
@@ -195,6 +213,7 @@ async function processBatch(supabaseClient: any, orders: any[]) {
         delivery_city: deliveryCity,
         fulfilled_at: fulfilledAt,
         dispatched_at: dispatchedAt,
+        scheduled_delivery_date: scheduledDeliveryDate,
         order_source: orderSource,
         note: o.note,
         tags: o.tags?.split(',').map((t: string) => t.trim()) || [],

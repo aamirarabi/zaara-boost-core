@@ -170,13 +170,44 @@ const Orders = () => {
       });
     }
 
-    const { data: courierData } = await supabase
-      .from("shopify_orders")
-      .select("courier_name, delivered_at, scheduled_delivery_date")
-      .not("courier_name", "is", null)
-      .limit(10000);
+    // Fetch ALL orders in batches to avoid timeout
+    console.log('Fetching courier data in batches...');
+    const allOrders: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
 
-    if (!courierData) return;
+    while (hasMore) {
+      const { data: batch, error } = await supabase
+        .from("shopify_orders")
+        .select("courier_name, delivered_at, scheduled_delivery_date")
+        .not("courier_name", "is", null)
+        .range(from, from + batchSize - 1);
+        
+      if (error) {
+        console.error('Error fetching courier batch:', error);
+        break;
+      }
+      
+      if (!batch || batch.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      allOrders.push(...batch);
+      console.log(`Fetched ${allOrders.length} orders so far...`);
+      
+      if (batch.length < batchSize) {
+        hasMore = false; // Last batch
+      }
+      
+      from += batchSize;
+    }
+
+    console.log(`Total courier data fetched: ${allOrders.length} orders`);
+    const courierData = allOrders;
+
+    if (!courierData || courierData.length === 0) return;
 
     const statsMap: any = {};
     courierData.forEach((order) => {
@@ -844,21 +875,27 @@ const Orders = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <Card className="mb-4 bg-blue-50 border-blue-200">
-              <CardContent className="py-3">
+            <Card className="mb-4 bg-gradient-to-r from-blue-50 to-green-50 border-blue-200">
+              <CardContent className="py-4">
                 <div className="flex items-center gap-6 text-sm flex-wrap">
-                  <span className="font-semibold text-gray-800">📅 Date Colors:</span>
+                  <span className="font-bold text-gray-800 flex items-center gap-2">
+                    📅 Date Columns:
+                  </span>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-blue-600"></div>
-                    <span className="text-blue-700 font-medium">SLA ETA</span>
+                    <span className="text-blue-700 font-medium">SLA ETA (Our Promise)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-600"></div>
+                    <span className="text-orange-700 font-medium">Courier ETA (Live from Leopards)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-green-600"></div>
-                    <span className="text-green-700 font-medium">Delivered</span>
+                    <span className="text-green-700 font-medium">Delivered (Actual)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                    <span className="text-gray-600">Not Yet Delivered</span>
+                    <span className="text-gray-600">Not Available</span>
                   </div>
                 </div>
               </CardContent>
@@ -876,6 +913,7 @@ const Orders = () => {
                   <TableHead className="hidden lg:table-cell">Source</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead className="hidden md:table-cell text-blue-700 font-semibold">SLA ETA</TableHead>
+                  <TableHead className="hidden md:table-cell text-orange-700 font-semibold">Courier ETA</TableHead>
                   <TableHead className="text-green-700 font-semibold">Delivered</TableHead>
                   <TableHead className="hidden md:table-cell">Performance</TableHead>
                   <TableHead>Status</TableHead>
@@ -982,6 +1020,11 @@ const Orders = () => {
                         {order.scheduled_delivery_date 
                           ? formatPakistanDate(order.scheduled_delivery_date)
                           : slaEta}
+                      </TableCell>
+                      <TableCell className="text-sm hidden md:table-cell text-orange-700 font-medium">
+                        {order.courier_estimated_delivery 
+                          ? formatPakistanDate(order.courier_estimated_delivery)
+                          : "—"}
                       </TableCell>
                       <TableCell className={`text-sm font-medium ${order.delivered_at ? 'text-green-700 font-semibold' : 'text-gray-400'}`}>
                         {deliveredDate}
