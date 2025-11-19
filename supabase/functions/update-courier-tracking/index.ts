@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       .not('tracking_number', 'is', null)
       .eq('courier_name', 'PostEx')
       .gte('created_at', sixtyDaysAgo.toISOString())
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
       .limit(500);
 
     if (postexError) {
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       .not('tracking_number', 'is', null)
       .eq('courier_name', 'Leopards')
       .gte('created_at', sixtyDaysAgo.toISOString())
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
       .limit(500);
 
     if (leopardsError) {
