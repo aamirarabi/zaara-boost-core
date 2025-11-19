@@ -51,7 +51,6 @@ Deno.serve(async (req) => {
       .select('*')
       .not('tracking_number', 'is', null)
       .eq('courier_name', 'PostEx')
-      .eq('fulfillment_status', 'fulfilled')
       .gte('created_at', sixtyDaysAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
@@ -66,7 +65,6 @@ Deno.serve(async (req) => {
       .select('*')
       .not('tracking_number', 'is', null)
       .eq('courier_name', 'Leopards')
-      .eq('fulfillment_status', 'fulfilled')
       .gte('created_at', sixtyDaysAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
