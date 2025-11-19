@@ -347,7 +347,7 @@ const Orders = () => {
       if (error) throw error;
 
       toast("Tracking Updated", {
-        description: `${data.trackedCount} orders tracked, ${data.deliveredCount} delivered`,
+        description: `Updated ${data.updatedCount || 0} orders (PostEx: ${data.postexCount || 0}, Leopards: ${data.leopardsCount || 0})`,
       });
 
       loadOrders();

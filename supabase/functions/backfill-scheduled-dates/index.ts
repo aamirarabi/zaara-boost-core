@@ -21,8 +21,8 @@ Deno.serve(async (req) => {
     // Get all fulfilled orders without scheduled_delivery_date
     const { data: orders, error } = await supabaseClient
       .from('shopify_orders')
-      .select('order_id, fulfilled_at, shipping_address')
-      .not('fulfilled_at', 'is', null)
+      .select('order_id, dispatched_at, fulfilled_at, shipping_address, fulfillment_status')
+      .eq('fulfillment_status', 'fulfilled')
       .is('scheduled_delivery_date', null)
 
     if (error) {
@@ -43,7 +43,14 @@ Deno.serve(async (req) => {
         const isKarachi = cityLower.includes('karachi')
         const slaDays = isKarachi ? 2 : 5
 
-        const dispatch = new Date(order.fulfilled_at)
+        // Use dispatched_at if available, otherwise fulfilled_at
+        const baseDate = order.dispatched_at || order.fulfilled_at
+        if (!baseDate) {
+          failed++
+          continue
+        }
+
+        const dispatch = new Date(baseDate)
         dispatch.setDate(dispatch.getDate() + slaDays)
         
         const { error: updateError } = await supabaseClient
@@ -53,7 +60,7 @@ Deno.serve(async (req) => {
 
         if (!updateError) {
           updated++
-          if (updated % 50 === 0) {
+          if (updated % 100 === 0) {
             console.log(`✅ Progress: ${updated}/${orders.length}`)
           }
         } else {
