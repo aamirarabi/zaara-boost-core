@@ -172,8 +172,9 @@ const Orders = () => {
 
     const { data: courierData } = await supabase
       .from("shopify_orders")
-      .select("courier_name, delivered_at, scheduled_delivery_date, fulfillment_status, created_at, shipping_address, dispatched_at, delivery_city")
-      .not("courier_name", "is", null);
+      .select("courier_name, delivered_at, scheduled_delivery_date")
+      .not("courier_name", "is", null)
+      .limit(10000);
 
     if (!courierData) return;
 
