@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       .eq('courier_name', 'PostEx')
       .gte('created_at', sixtyDaysAgo.toISOString())
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(500);
 
     if (postexError) {
       console.error('Error fetching PostEx orders:', postexError);
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       .eq('courier_name', 'Leopards')
       .gte('created_at', sixtyDaysAgo.toISOString())
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(500);
 
     if (leopardsError) {
       console.error('Error fetching Leopards orders:', leopardsError);
