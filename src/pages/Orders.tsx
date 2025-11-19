@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2, Truck, AlertCircle, FileDown, FileSpreadsheet, Download } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, RefreshCcw, Loader2, Truck, AlertCircle, FileDown, FileSpreadsheet, Download } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -684,6 +684,47 @@ const Orders = () => {
             <Button onClick={updateCourierTracking} variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-50">
               <Truck className="mr-2 h-4 w-4" />
               Update Tracking
+            </Button>
+
+            <Button
+              onClick={async () => {
+                const confirmed = window.confirm(
+                  'This will calculate scheduled delivery dates for all existing fulfilled orders (one-time operation). Continue?'
+                )
+                if (!confirmed) return
+                
+                toast.info('Backfilling scheduled dates... This may take 1-2 minutes.')
+                
+                try {
+                  const { data: { session } } = await supabase.auth.getSession()
+                  const response = await supabase.functions.invoke('backfill-scheduled-dates', {
+                    headers: {
+                      Authorization: `Bearer ${session?.access_token}`
+                    }
+                  })
+                  
+                  if (response.error) throw response.error
+                  
+                  const result = response.data
+                  
+                  if (result.success) {
+                    toast.success(result.message)
+                    // Reload stats
+                    loadStats()
+                    loadCourierStats()
+                  } else {
+                    toast.error('Backfill failed: ' + result.error)
+                  }
+                } catch (error) {
+                  console.error('Backfill error:', error)
+                  toast.error('Failed to backfill dates')
+                }
+              }}
+              variant="outline"
+              className="border-purple-500 text-purple-600 hover:bg-purple-50"
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Backfill Dates (One-time)
             </Button>
           </div>
         </div>
