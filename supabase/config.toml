@@ -1,5 +1,8 @@
 project_id = "szralwiwcilltwmxxczq"
 
+[functions.test-leopards-tracking]
+verify_jwt = false
+
 [functions.whatsapp-webhook]
 verify_jwt = false
 

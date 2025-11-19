@@ -215,6 +215,32 @@ const Orders = () => {
     setCourierStats(statsArray);
   };
 
+  const testLeopardsTracking = async () => {
+    toast.loading("Testing Leopards API...");
+    
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('test-leopards-tracking');
+      
+      if (invokeError) {
+        console.error('❌ Error calling test function:', invokeError);
+        toast.error(`Test failed: ${invokeError.message}`);
+        return;
+      }
+
+      console.log('\n=== LEOPARDS API TEST RESPONSE ===');
+      console.log(JSON.stringify(data, null, 2));
+      
+      if (data.success) {
+        toast.success("✅ Test complete! Check browser console for full response.");
+      } else {
+        toast.error(`Test failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('❌ Test error:', err);
+      toast.error('Failed to test Leopards API');
+    }
+  };
+
   const syncOrders = async () => {
     setSyncing(true);
     toast("Syncing Orders", {
@@ -564,6 +590,14 @@ const Orders = () => {
                   Export Excel
                 </>
               )}
+            </Button>
+            
+            <Button 
+              onClick={testLeopardsTracking}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              🔍 Test Leopards API
             </Button>
             
             <Button onClick={syncOrders} disabled={syncing}>
