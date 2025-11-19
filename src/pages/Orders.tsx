@@ -146,7 +146,7 @@ const Orders = () => {
 
     const { data: courierData } = await supabase
       .from("shopify_orders")
-      .select("courier_name, actual_delivery_date, estimated_delivery_date, fulfillment_status, created_at, shipping_address, dispatched_at, delivery_city")
+      .select("courier_name, delivered_at, scheduled_delivery_date, fulfillment_status, created_at, shipping_address, dispatched_at, delivery_city")
       .not("courier_name", "is", null);
 
     if (!courierData) return;
@@ -173,35 +173,33 @@ const Orders = () => {
       statsMap[courier].total++;
       
       // Only calculate for delivered orders
-      if (order.actual_delivery_date && order.dispatched_at) {
+      if (order.delivered_at && order.scheduled_delivery_date) {
         statsMap[courier].delivered++;
         
-        const actual = new Date(order.actual_delivery_date);
-        const dispatched = new Date(order.dispatched_at);
-        const shippingAddress = order.shipping_address as any;
-        const city = (order.delivery_city || shippingAddress?.city || "").toLowerCase();
-        const isKarachi = city.includes("karachi");
+        // Compare actual delivery date with scheduled delivery date (SLA ETA)
+        const actualDelivery = new Date(order.delivered_at);
+        const scheduledDelivery = new Date(order.scheduled_delivery_date);
         
-        // Get SLA days from database settings (flexible - you can change anytime!)
-        const courierSLA = slaMap[courier];
-        const expectedDays = isKarachi 
-          ? (courierSLA?.karachi || 2)  // Default 2 days for Karachi
-          : (courierSLA?.other || 5);    // Default 5 days for other cities
+        // Set both dates to midnight for fair day comparison
+        actualDelivery.setHours(0, 0, 0, 0);
+        scheduledDelivery.setHours(0, 0, 0, 0);
         
-        const expectedDelivery = new Date(dispatched);
-        expectedDelivery.setDate(expectedDelivery.getDate() + expectedDays);
-        
-        const diffDays = Math.ceil((actual.getTime() - expectedDelivery.getTime()) / (1000 * 60 * 60 * 24));
+        // Calculate difference in days
+        const diffDays = Math.ceil((actualDelivery.getTime() - scheduledDelivery.getTime()) / (1000 * 60 * 60 * 24));
         
         if (diffDays < 0) {
+          // Delivered before SLA ETA = Early
           statsMap[courier].early++;
         } else if (diffDays === 0) {
+          // Delivered on SLA ETA = On-time
           statsMap[courier].onTime++;
         } else {
+          // Delivered after SLA ETA = Late
           statsMap[courier].late++;
           statsMap[courier].totalDelayDays += diffDays;
         }
       } else {
+        // No delivery date yet = Pending
         statsMap[courier].pending++;
       }
     });
