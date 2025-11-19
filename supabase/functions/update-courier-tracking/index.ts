@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
     
     const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 90);
     
     console.log('Fetching PostEx orders...');
     const { data: postexOrders, error: postexError } = await supabase
