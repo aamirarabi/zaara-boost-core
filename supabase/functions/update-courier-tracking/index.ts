@@ -247,6 +247,16 @@ Deno.serve(async (req) => {
                   updateData.courier_api_status = packet.booked_packet_status;
                 }
 
+                // Extract Leopards estimated delivery date
+                if (packet.delivery_date) {
+                  try {
+                    updateData.courier_estimated_delivery = new Date(packet.delivery_date).toISOString();
+                    console.log(`📅 Leopards ETA: ${packet.delivery_date}`);
+                  } catch (e) {
+                    console.error('Error parsing Leopards delivery_date:', e);
+                  }
+                }
+
                 const { error } = await supabase
                   .from('shopify_orders')
                   .update(updateData)
