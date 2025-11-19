@@ -228,9 +228,23 @@ Deno.serve(async (req) => {
                   courier_last_updated: new Date().toISOString(),
                 };
 
-                if (packet.delivery_date) {
-                  updateData.delivered_at = packet.delivery_date;
-                  console.log(`📅 ${order.order_number}: ${packet.delivery_date}`);
+                // Parse delivery date from Tracking Detail array
+                const trackingDetail = packet['Tracking Detail'] || packet.tracking_detail || [];
+                if (Array.isArray(trackingDetail)) {
+                  const deliveredEvent = trackingDetail.find(
+                    (event: any) => event.Status === "Delivered"
+                  );
+                  
+                  if (deliveredEvent && deliveredEvent.Activity_datetime) {
+                    // Convert "2025-11-10 20:52:00" to ISO timestamp
+                    updateData.delivered_at = new Date(deliveredEvent.Activity_datetime).toISOString();
+                    console.log(`📅 ${order.order_number}: ${deliveredEvent.Activity_datetime}`);
+                    
+                    // Save who received it
+                    if (deliveredEvent.Reciever_Name) {
+                      updateData.delivered_to_name = deliveredEvent.Reciever_Name.trim();
+                    }
+                  }
                 }
 
                 if (packet.booked_packet_status) {
