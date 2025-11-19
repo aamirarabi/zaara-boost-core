@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ===== FETCH ORDERS SEPARATELY BY COURIER (OLDER ORDERS) =====
-    console.log('Fetching orders with tracking numbers (15-60 days old)...');
+    console.log('Fetching orders with tracking numbers (last 60 days)...');
     
     const fifteenDaysAgo = new Date();
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
@@ -53,7 +53,6 @@ Deno.serve(async (req) => {
       .eq('courier_name', 'PostEx')
       .eq('fulfillment_status', 'fulfilled')
       .gte('created_at', sixtyDaysAgo.toISOString())
-      .lte('created_at', fifteenDaysAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -69,7 +68,6 @@ Deno.serve(async (req) => {
       .eq('courier_name', 'Leopards')
       .eq('fulfillment_status', 'fulfilled')
       .gte('created_at', sixtyDaysAgo.toISOString())
-      .lte('created_at', fifteenDaysAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
 
