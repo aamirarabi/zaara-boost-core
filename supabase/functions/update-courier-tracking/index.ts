@@ -37,41 +37,84 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ===== FETCH ORDERS SEPARATELY BY COURIER (OLDER ORDERS) =====
-    console.log('Fetching orders with tracking numbers (last 60 days)...');
+    console.log('Fetching orders with tracking numbers (last year)...');
     
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-    
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 90);
+    const oneYearAgo = new Date();
+    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
     
     console.log('Fetching PostEx orders...');
-    const { data: postexOrders, error: postexError } = await supabase
-      .from('shopify_orders')
-      .select('*')
-      .not('tracking_number', 'is', null)
-      .eq('courier_name', 'PostEx')
-      .gte('created_at', sixtyDaysAgo.toISOString())
-      .order('created_at', { ascending: true })
-      .limit(500);
+    const allPostexOrders: any[] = [];
+    let postexFrom = 0;
+    const postexBatchSize = 1000;
+    let hasMorePostex = true;
 
-    if (postexError) {
-      console.error('Error fetching PostEx orders:', postexError);
+    while (hasMorePostex) {
+      const { data: batch, error } = await supabase
+        .from('shopify_orders')
+        .select('order_id, order_number, tracking_number, courier_name')
+        .eq('courier_name', 'PostEx')
+        .not('tracking_number', 'is', null)
+        .gte('created_at', oneYearAgo.toISOString())
+        .range(postexFrom, postexFrom + postexBatchSize - 1);
+      
+      if (error) {
+        console.error('Error fetching PostEx batch:', error);
+        break;
+      }
+      
+      if (!batch || batch.length === 0) {
+        hasMorePostex = false;
+        break;
+      }
+      
+      allPostexOrders.push(...batch);
+      console.log(`Fetched ${allPostexOrders.length} PostEx orders so far...`);
+      
+      if (batch.length < postexBatchSize) {
+        hasMorePostex = false;
+      }
+      
+      postexFrom += postexBatchSize;
     }
+
+    const postexOrders = allPostexOrders;
 
     console.log('Fetching Leopards orders...');
-    const { data: leopardsOrders, error: leopardsError } = await supabase
-      .from('shopify_orders')
-      .select('*')
-      .not('tracking_number', 'is', null)
-      .eq('courier_name', 'Leopards')
-      .gte('created_at', sixtyDaysAgo.toISOString())
-      .order('created_at', { ascending: true })
-      .limit(500);
+    const allLeopardsOrders: any[] = [];
+    let leopardsFrom = 0;
+    const leopardsBatchSize = 1000;
+    let hasMoreLeopards = true;
 
-    if (leopardsError) {
-      console.error('Error fetching Leopards orders:', leopardsError);
+    while (hasMoreLeopards) {
+      const { data: batch, error } = await supabase
+        .from('shopify_orders')
+        .select('order_id, order_number, tracking_number, courier_name')
+        .eq('courier_name', 'Leopards')
+        .not('tracking_number', 'is', null)
+        .gte('created_at', oneYearAgo.toISOString())
+        .range(leopardsFrom, leopardsFrom + leopardsBatchSize - 1);
+      
+      if (error) {
+        console.error('Error fetching Leopards batch:', error);
+        break;
+      }
+      
+      if (!batch || batch.length === 0) {
+        hasMoreLeopards = false;
+        break;
+      }
+      
+      allLeopardsOrders.push(...batch);
+      console.log(`Fetched ${allLeopardsOrders.length} Leopards orders so far...`);
+      
+      if (batch.length < leopardsBatchSize) {
+        hasMoreLeopards = false;
+      }
+      
+      leopardsFrom += leopardsBatchSize;
     }
+
+    const leopardsOrders = allLeopardsOrders;
 
     const orders = [
       ...(postexOrders || []),
@@ -97,110 +140,104 @@ Deno.serve(async (req) => {
     console.log(`📮 PostEx: ${postexOrders?.length || 0}`);
     console.log(`🐆 Leopards: ${leopardsOrders?.length || 0}`);
 
-    // ===== POSTEX TRACKING (INDEPENDENT WITH FALLBACK) =====
+    // ===== POSTEX TRACKING (GET METHOD) =====
     if (postexOrders && postexOrders.length > 0) {
       console.log(`\n📮 Starting PostEx tracking for ${postexOrders.length} orders...`);
       
-      const trackingNumbers = postexOrders.map(o => o.tracking_number);
-      console.log('PostEx tracking numbers:', trackingNumbers.slice(0, 5), '...');
+      // Process in batches of 100 tracking numbers (API limit)
+      const batchSize = 100;
       
-      try {
-        console.log('Calling PostEx API (POST method)...');
+      for (let i = 0; i < postexOrders.length; i += batchSize) {
+        const batch = postexOrders.slice(i, i + batchSize);
+        const trackingNumbers = batch.map(o => o.tracking_number);
         
-        const postexResponse = await fetch(
-          'https://api.postex.pk/services/integration/api/order/v1/track-bulk-order',
-          {
-            method: 'POST',
+        try {
+          // Build GET request URL with comma-separated tracking numbers
+          const trackingParams = trackingNumbers.join(',');
+          const postexUrl = `https://api.postex.pk/services/integration/api/order/v1/track-bulk-order?trackingNumber=${encodeURIComponent(trackingParams)}`;
+          
+          console.log(`Calling PostEx API (GET) for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(postexOrders.length / batchSize)}...`);
+          
+          const postexResponse = await fetch(postexUrl, {
+            method: 'GET',
             headers: {
-              'Content-Type': 'application/json',
               'token': postexToken,
-            },
-            body: JSON.stringify({
-              trackingNumber: trackingNumbers,
-            }),
-          }
-        );
-
-        console.log(`PostEx API response: ${postexResponse.status}`);
-
-        // Try alternate endpoint if 405 Method Not Allowed
-        if (postexResponse.status === 405) {
-          console.log('⚠️ 405 error, trying alternate endpoint...');
-          const altResponse = await fetch(
-            'https://api.postex.pk/services/integration/api/order/v2/track-bulk-order',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'token': postexToken,
-              },
-              body: JSON.stringify({
-                trackingNumber: trackingNumbers,
-              }),
             }
-          );
-          
-          if (altResponse.ok) {
-            const altData = await altResponse.json();
-            console.log('✅ Alternate endpoint success!');
-            // Process altData same as below
-          }
-        }
+          });
 
-        if (postexResponse.ok) {
-          const postexData = await postexResponse.json();
-          console.log('✅ PostEx API success!');
-          
-          if (postexData.statusCode === '200' && postexData.dist) {
-            console.log(`Processing ${postexData.dist.length} PostEx results...`);
+          console.log(`PostEx API response: ${postexResponse.status}`);
+
+          if (postexResponse.ok) {
+            const postexData = await postexResponse.json();
+            console.log('✅ PostEx API success!');
             
-            for (const trackingResult of postexData.dist) {
-              try {
-                const trackingResponse = trackingResult.trackingResponse;
-                const trackingNumber = trackingResult.trackingNumber;
-                
-                const order = postexOrders.find(o => o.tracking_number === trackingNumber);
-                if (!order) continue;
-
-                const updateData: any = {
-                  courier_last_updated: new Date().toISOString(),
-                };
-
-                if (trackingResponse.orderDeliveryDate) {
-                  updateData.delivered_at = trackingResponse.orderDeliveryDate;
-                }
-
-                if (trackingResponse.transactionStatus) {
-                  const statusCode = trackingResponse.transactionStatus;
-                  updateData.courier_api_status = POSTEX_STATUS_MAP[statusCode] || statusCode;
+            if (postexData.statusCode === '200' && postexData.dist) {
+              console.log(`Processing ${postexData.dist.length} PostEx results...`);
+              
+              for (const trackingResult of postexData.dist) {
+                try {
+                  const trackingResponse = trackingResult.trackingResponse;
+                  const trackingNumber = trackingResult.trackingNumber;
                   
-                  if (statusCode === '0005' && trackingResponse.orderDeliveryDate) {
-                    updateData.delivered_at = trackingResponse.orderDeliveryDate;
+                  const order = batch.find(o => o.tracking_number === trackingNumber);
+                  if (!order) continue;
+
+                  const updateData: any = {
+                    courier_last_updated: new Date().toISOString(),
+                  };
+
+                  // Extract delivery date if available
+                  if (trackingResponse.orderDeliveryDate) {
+                    try {
+                      updateData.delivered_at = new Date(trackingResponse.orderDeliveryDate).toISOString();
+                      console.log(`📅 ${order.order_number}: ${trackingResponse.orderDeliveryDate}`);
+                    } catch (e) {
+                      console.error('Error parsing orderDeliveryDate:', e);
+                    }
                   }
-                }
 
-                const { error } = await supabase
-                  .from('shopify_orders')
-                  .update(updateData)
-                  .eq('order_id', order.order_id);
+                  // Extract status
+                  if (trackingResponse.transactionStatus) {
+                    const statusCode = trackingResponse.transactionStatus;
+                    updateData.courier_api_status = POSTEX_STATUS_MAP[statusCode] || statusCode;
+                    
+                    // Status code 0005 = Delivered
+                    if (statusCode === '0005' && trackingResponse.orderDeliveryDate) {
+                      updateData.delivered_at = new Date(trackingResponse.orderDeliveryDate).toISOString();
+                    }
+                  }
 
-                if (!error) {
-                  updatedCount++;
-                  console.log(`✅ PostEx: ${order.order_number}`);
+                  const { error } = await supabase
+                    .from('shopify_orders')
+                    .update(updateData)
+                    .eq('order_id', order.order_id);
+
+                  if (!error) {
+                    updatedCount++;
+                    if (updatedCount % 50 === 0) {
+                      console.log(`✅ Progress: ${updatedCount} orders updated`);
+                    }
+                  }
+                } catch (orderError) {
+                  console.error(`⚠️ Error processing PostEx order:`, orderError);
                 }
-              } catch (orderError) {
-                console.error(`⚠️ Error processing PostEx order:`, orderError);
               }
             }
+          } else {
+            const errorText = await postexResponse.text();
+            console.error(`❌ PostEx API error ${postexResponse.status}:`, errorText);
           }
-        } else {
-          const errorText = await postexResponse.text();
-          console.error(`❌ PostEx API error ${postexResponse.status}:`, errorText);
+          
+          // Rate limiting: wait 500ms between batches
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+        } catch (batchError) {
+          console.error('❌ PostEx batch failed:', batchError);
+          console.log('⚠️ Continuing with next batch...');
         }
-      } catch (postexError) {
-        console.error('❌ PostEx tracking failed completely:', postexError);
-        console.log('⚠️ Continuing with Leopards tracking...');
       }
+      
+      console.log(`✅ PostEx tracking complete`);
     }
 
     // ===== LEOPARDS TRACKING (GET METHOD) =====
