@@ -12,7 +12,7 @@ import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, Loader2, Tr
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { formatPKRCurrency, formatPakistanDate, getPakistanMonthName } from "@/lib/utils";
+import { formatPKRCurrency, formatPakistanDate, formatPakistanDateTime, getPakistanMonthName } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -95,7 +95,7 @@ const Orders = () => {
     }
     
     if (deliveryFilter === "delivered") {
-      query = query.not("actual_delivery_date", "is", null);
+      query = query.not("delivered_at", "is", null);
     }
 
     const { data } = await query;
@@ -211,6 +211,17 @@ const Orders = () => {
       onTimeRate: stat.delivered > 0 ? Math.round(((stat.onTime + stat.early) / stat.delivered) * 100) : 0,
       avgDelay: stat.late > 0 ? (stat.totalDelayDays / stat.late).toFixed(1) : 0,
     }));
+
+    // Sort: PostEx first, then Leopards, then others
+    statsArray.sort((a: any, b: any) => {
+      const order = ['PostEx', 'Leopards'];
+      const aIndex = order.indexOf(a.name);
+      const bIndex = order.indexOf(b.name);
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
     setCourierStats(statsArray);
   };
@@ -799,15 +810,16 @@ const Orders = () => {
                 <TableRow>
                   <TableHead>Order #</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Order Date</TableHead>
-                  <TableHead>Dispatch Date</TableHead>
+                  <TableHead className="hidden md:table-cell">Order Date</TableHead>
+                  <TableHead className="hidden md:table-cell">Dispatch Date</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Courier</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Source</TableHead>
+                  <TableHead className="hidden lg:table-cell">Items</TableHead>
+                  <TableHead className="hidden lg:table-cell">Source</TableHead>
                   <TableHead>Total</TableHead>
-                  <TableHead>SLA ETA</TableHead>
+                  <TableHead className="hidden md:table-cell">SLA ETA</TableHead>
                   <TableHead>Delivered</TableHead>
+                  <TableHead className="hidden md:table-cell">Performance</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -827,13 +839,7 @@ const Orders = () => {
                     : '—';
                   
                   const deliveredDate = order.delivered_at
-                    ? new Date(order.delivered_at).toLocaleString('en-GB', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
+                    ? formatPakistanDateTime(order.delivered_at)
                     : '—';
                   
                   // Calculate ETA based on SLA (2 days Karachi, 5 days other)
@@ -895,43 +901,48 @@ const Orders = () => {
                           <div className="text-sm text-muted-foreground">{order.customer_phone || "—"}</div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{orderDate}</TableCell>
-                      <TableCell className="text-sm">{dispatchDate}</TableCell>
+                      <TableCell className="text-sm hidden md:table-cell">{orderDate}</TableCell>
+                      <TableCell className="text-sm hidden md:table-cell">{dispatchDate}</TableCell>
                       <TableCell className="text-sm">{city}</TableCell>
                       <TableCell>
                         <Badge className={courierBadge.color}>
                           {courierBadge.icon} {courierBadge.text || order.courier_name}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <div className="max-w-[200px] truncate cursor-help" title={itemsText}>
                           {items.length}x {shortName}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <Badge className={getSourceColor(order.order_source || 'Organic')}>
                           {order.order_source || 'Organic'}
                         </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{formatPKRCurrency(order.total_price)}</TableCell>
-                      <TableCell className="text-sm">{slaEta}</TableCell>
+                      <TableCell className="text-sm hidden md:table-cell">{slaEta}</TableCell>
                       <TableCell className="text-sm font-medium">{deliveredDate}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {delayDisplay ? (
-                          <Badge className={
-                            delayDays! < 0 
-                              ? 'bg-green-100 text-green-800 hover:bg-green-100'
-                              : delayDays === 0
-                              ? 'bg-blue-100 text-blue-800 hover:bg-blue-100'
-                              : 'bg-red-100 text-red-800 hover:bg-red-100'
-                          }>
-                            {delayDisplay}
-                          </Badge>
+                          <div className="flex justify-center">
+                            <Badge className={
+                              delayDays! < 0 
+                                ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-100'
+                                : delayDays === 0
+                                ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-100'
+                                : 'bg-red-100 text-red-800 border-red-300 hover:bg-red-100'
+                            }>
+                              {delayDisplay}
+                            </Badge>
+                          </div>
                         ) : (
-                          <Badge variant={getStatusColor(order.fulfillment_status)}>
-                            {order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
-                          </Badge>
+                          <span className="text-muted-foreground">—</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(order.fulfillment_status)}>
+                          {order.fulfillment_status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   );

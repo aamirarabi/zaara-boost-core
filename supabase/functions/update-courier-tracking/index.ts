@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
                 };
 
                 // Parse delivery date from Tracking Detail array
-                const trackingDetail = packet['Tracking Detail'] || packet.tracking_detail || [];
+                const trackingDetail = packet.packet_history || packet['Tracking Detail'] || packet.tracking_detail || [];
                 if (Array.isArray(trackingDetail)) {
                   const deliveredEvent = trackingDetail.find(
                     (event: any) => event.Status === "Delivered"
