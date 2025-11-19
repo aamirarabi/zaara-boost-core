@@ -32,6 +32,9 @@ const Orders = () => {
     pendingOrders: 0,
     fulfilledOrders: 0,
     thisMonthOrders: 0,
+    last24HoursTotal: 0,
+    last24HoursFulfilled: 0,
+    last24HoursPending: 0,
   });
   const [exportDays, setExportDays] = useState(15);
   const [exporting, setExporting] = useState(false);
@@ -70,11 +73,34 @@ const Orders = () => {
       .select("*", { count: "exact", head: true })
       .gte("created_at", firstDayOfMonth.toISOString());
 
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+    const { count: last24HoursTotal } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", twentyFourHoursAgo.toISOString());
+
+    const { count: last24HoursFulfilled } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true })
+      .eq("fulfillment_status", "fulfilled")
+      .gte("created_at", twentyFourHoursAgo.toISOString());
+
+    const { count: last24HoursPending } = await supabase
+      .from("shopify_orders")
+      .select("*", { count: "exact", head: true })
+      .or("fulfillment_status.is.null,fulfillment_status.eq.pending,fulfillment_status.eq.partial")
+      .gte("created_at", twentyFourHoursAgo.toISOString());
+
     setStats({
       totalOrders: totalOrders || 0,
       pendingOrders: pendingOrders || 0,
       fulfilledOrders: fulfilledOrders || 0,
       thisMonthOrders: thisMonthOrders || 0,
+      last24HoursTotal: last24HoursTotal || 0,
+      last24HoursFulfilled: last24HoursFulfilled || 0,
+      last24HoursPending: last24HoursPending || 0,
     });
   };
 
@@ -672,6 +698,20 @@ const Orders = () => {
               <p className="text-xs text-muted-foreground">Since {getPakistanMonthName()}</p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Last 24 Hours</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.last24HoursTotal}</div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                <span className="text-green-600 font-medium">{stats.last24HoursFulfilled} fulfilled</span>
+                <span className="text-orange-600 font-medium">{stats.last24HoursPending} pending</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Courier Performance Cards */}
@@ -803,6 +843,25 @@ const Orders = () => {
             </div>
           </CardHeader>
           <CardContent>
+            <Card className="mb-4 bg-blue-50 border-blue-200">
+              <CardContent className="py-3">
+                <div className="flex items-center gap-6 text-sm flex-wrap">
+                  <span className="font-semibold text-gray-800">📅 Date Colors:</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-600"></div>
+                    <span className="text-blue-700 font-medium">SLA ETA</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-600"></div>
+                    <span className="text-green-700 font-medium">Delivered</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                    <span className="text-gray-600">Not Yet Delivered</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -815,8 +874,8 @@ const Orders = () => {
                   <TableHead className="hidden lg:table-cell">Items</TableHead>
                   <TableHead className="hidden lg:table-cell">Source</TableHead>
                   <TableHead>Total</TableHead>
-                  <TableHead className="hidden md:table-cell">SLA ETA</TableHead>
-                  <TableHead>Delivered</TableHead>
+                  <TableHead className="hidden md:table-cell text-blue-700 font-semibold">SLA ETA</TableHead>
+                  <TableHead className="text-green-700 font-semibold">Delivered</TableHead>
                   <TableHead className="hidden md:table-cell">Performance</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -918,8 +977,14 @@ const Orders = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{formatPKRCurrency(order.total_price)}</TableCell>
-                      <TableCell className="text-sm hidden md:table-cell">{slaEta}</TableCell>
-                      <TableCell className="text-sm font-medium">{deliveredDate}</TableCell>
+                      <TableCell className="text-sm hidden md:table-cell text-blue-700 font-medium">
+                        {order.scheduled_delivery_date 
+                          ? formatPakistanDate(order.scheduled_delivery_date)
+                          : slaEta}
+                      </TableCell>
+                      <TableCell className={`text-sm font-medium ${order.delivered_at ? 'text-green-700 font-semibold' : 'text-gray-400'}`}>
+                        {deliveredDate}
+                      </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {delayDisplay ? (
                           <div className="flex justify-center">
