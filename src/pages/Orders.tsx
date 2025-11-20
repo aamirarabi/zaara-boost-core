@@ -1319,21 +1319,17 @@ const Orders = () => {
               </SelectContent>
             </Select>
             
-            <Button onClick={exportToPDF} disabled={exporting} variant="outline" className="hover:bg-red-50">
-              {exporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <FileDown className="h-4 w-4 mr-2" />
-                  Export PDF
-                </>
-              )}
-            </Button>
-            
-            <Button onClick={exportToExcel} disabled={exporting} variant="outline" className="hover:bg-green-50">
+            <Button onClick={async () => {
+              setExporting(true);
+              try {
+                await exportPerformanceToExcel();
+              } catch (error) {
+                console.error('Excel export error:', error);
+                toast.error('Failed to generate Excel report');
+              } finally {
+                setExporting(false);
+              }
+            }} disabled={exporting} variant="outline" className="hover:bg-green-50">
               {exporting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1475,99 +1471,133 @@ const Orders = () => {
           </Card>
         </div>
 
-        {/* 60-Day Delivery Status Summary - COMPACT VERSION */}
-        <div className="mb-3">
-          <Card className="border-2 border-blue-500 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-1.5 px-3">
+        {/* 60-Day Delivery Status - BEAUTIFUL & SLEEK */}
+        <div className="mb-4">
+          <Card className="border-2 border-blue-500 shadow-xl bg-gradient-to-br from-blue-50 to-purple-50">
+            <CardHeader className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 text-white py-3 px-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                    <Package className="h-4 w-4" />
-                    Last 60 Days Delivery Status
-                  </CardTitle>
-                  <p className="text-[9px] text-blue-100">
-                    {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} - {new Date().toLocaleDateString('en-GB')}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                    <Package className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold">
+                      Last 60 Days Delivery Status
+                    </CardTitle>
+                    <p className="text-xs text-blue-100 mt-1">
+                      📅 {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} → {new Date().toLocaleDateString('en-GB')}
+                    </p>
+                  </div>
                 </div>
-                <Badge variant="secondary" className="text-[9px] px-2 py-0">
-                  {stats60Days.total} Total
-                </Badge>
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+                  <div className="text-xs text-blue-100">TOTAL ORDERS</div>
+                  <div className="text-2xl font-bold">{stats60Days.total}</div>
+                </div>
               </div>
             </CardHeader>
             
-            <CardContent className="py-1.5 px-2">
-              {/* Compact Grid */}
-              <div className="grid grid-cols-4 gap-1.5">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-4 gap-4">
                 {/* Delivered */}
-                <div className="text-center p-1.5 bg-green-50 border border-green-200 rounded">
-                  <div className="text-lg mb-0">📦</div>
-                  <div className="text-lg font-bold text-green-700">
-                    {stats60Days.delivered}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-green-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-green-300 rounded-xl hover:border-green-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2 animate-bounce">📦</div>
+                    <div className="text-3xl font-bold text-green-700 mb-1">
+                      {stats60Days.delivered}
+                    </div>
+                    <div className="text-xs font-semibold text-green-900 mb-2">
+                      DELIVERED
+                    </div>
+                    <Badge className="bg-green-600 text-white text-sm px-3 py-1 font-bold shadow-md">
+                      {stats60Days.deliveryRate}%
+                    </Badge>
+                    <div className="text-xs text-green-700 font-medium mt-2">
+                      {stats60Days.deliveryRate >= 80 ? '🌟 Excellent!' : stats60Days.deliveryRate >= 70 ? '✅ Good' : '⚠️ Improve'}
+                    </div>
                   </div>
-                  <div className="text-[9px] font-medium text-green-900">
-                    Delivered
-                  </div>
-                  <Badge className="bg-green-600 text-white text-[9px] px-1 py-0 mt-0">
-                    {stats60Days.deliveryRate}%
-                  </Badge>
                 </div>
                 
                 {/* In Transit */}
-                <div className="text-center p-1.5 bg-blue-50 border border-blue-200 rounded">
-                  <div className="text-lg mb-0">🚚</div>
-                  <div className="text-lg font-bold text-blue-700">
-                    {stats60Days.inTransit}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-blue-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-blue-300 rounded-xl hover:border-blue-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2 animate-pulse">🚚</div>
+                    <div className="text-3xl font-bold text-blue-700 mb-1">
+                      {stats60Days.inTransit}
+                    </div>
+                    <div className="text-xs font-semibold text-blue-900 mb-2">
+                      IN TRANSIT
+                    </div>
+                    <Badge variant="outline" className="border-2 border-blue-600 text-blue-700 text-sm px-3 py-1 font-bold">
+                      {Math.round((stats60Days.inTransit / stats60Days.total) * 100)}%
+                    </Badge>
+                    <div className="text-xs text-blue-700 font-medium mt-2">
+                      🚀 On the way
+                    </div>
                   </div>
-                  <div className="text-[9px] font-medium text-blue-900">
-                    In Transit
-                  </div>
-                  <Badge variant="outline" className="border-blue-600 text-blue-700 text-[9px] px-1 py-0 mt-0">
-                    On the way
-                  </Badge>
                 </div>
                 
                 {/* Returned */}
-                <div className="text-center p-1.5 bg-red-50 border border-red-200 rounded">
-                  <div className="text-lg mb-0">🔄</div>
-                  <div className="text-lg font-bold text-red-700">
-                    {stats60Days.returned}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-100 to-red-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-red-300 rounded-xl hover:border-red-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2">🔄</div>
+                    <div className="text-3xl font-bold text-red-700 mb-1">
+                      {stats60Days.returned}
+                    </div>
+                    <div className="text-xs font-semibold text-red-900 mb-2">
+                      RETURNED
+                    </div>
+                    <Badge variant="destructive" className="text-sm px-3 py-1 font-bold shadow-md">
+                      {stats60Days.returnRate}%
+                    </Badge>
+                    <div className="text-xs text-red-700 font-medium mt-2">
+                      {stats60Days.returnRate <= 3 ? '✅ Low' : stats60Days.returnRate <= 5 ? '⚠️ Normal' : '🚨 High'}
+                    </div>
                   </div>
-                  <div className="text-[9px] font-medium text-red-900">
-                    Returned
-                  </div>
-                  <Badge variant="destructive" className="text-[9px] px-1 py-0 mt-0">
-                    {stats60Days.returnRate}%
-                  </Badge>
                 </div>
                 
                 {/* Pending */}
-                <div className="text-center p-1.5 bg-orange-50 border border-orange-200 rounded">
-                  <div className="text-lg mb-0">⏳</div>
-                  <div className="text-lg font-bold text-orange-700">
-                    {stats60Days.pending}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-orange-300 rounded-xl hover:border-orange-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2">⏳</div>
+                    <div className="text-3xl font-bold text-orange-700 mb-1">
+                      {stats60Days.pending}
+                    </div>
+                    <div className="text-xs font-semibold text-orange-900 mb-2">
+                      PENDING
+                    </div>
+                    <Badge className="bg-orange-500 text-white text-sm px-3 py-1 font-bold shadow-md">
+                      {Math.round((stats60Days.pending / stats60Days.total) * 100)}%
+                    </Badge>
+                    <div className="text-xs text-orange-700 font-medium mt-2">
+                      📋 To Ship
+                    </div>
                   </div>
-                  <div className="text-[9px] font-medium text-orange-900">
-                    Pending
-                  </div>
-                  <Badge className="bg-orange-600 text-white text-[9px] px-1 py-0 mt-0">
-                    To Ship
-                  </Badge>
                 </div>
               </div>
               
-              {/* Compact Summary Bar */}
-              <div className="mt-1.5 pt-1.5 border-t flex justify-around text-center text-[9px]">
-                <div>
-                  <div className="text-muted-foreground mb-0.5">Success</div>
-                  <div className="text-xs font-bold text-green-600">{stats60Days.deliveryRate}%</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground mb-0.5">Active</div>
-                  <div className="text-xs font-bold text-blue-600">{stats60Days.inTransit + stats60Days.pending}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground mb-0.5">Returns</div>
-                  <div className="text-xs font-bold text-red-600">{stats60Days.returned}</div>
+              {/* Quick Stats Bar */}
+              <div className="mt-4 pt-4 border-t-2 border-blue-200">
+                <div className="flex justify-around text-center">
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Success Rate</div>
+                    <div className="text-lg font-bold text-green-600">{stats60Days.deliveryRate}%</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Active</div>
+                    <div className="text-lg font-bold text-blue-600">{stats60Days.inTransit}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Return Rate</div>
+                    <div className="text-lg font-bold text-red-600">{stats60Days.returnRate}%</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">To Process</div>
+                    <div className="text-lg font-bold text-orange-600">{stats60Days.pending}</div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -1617,6 +1647,44 @@ const Orders = () => {
                         Avg Delay: {courier.avgDelay} days
                       </div>
                     )}
+                    
+                    {/* Mini Bar Chart */}
+                    <div className="mt-3 pt-3 border-t">
+                      <div className="flex items-end justify-between gap-1 h-16">
+                        {/* Early Bar */}
+                        <div className="flex-1 flex flex-col items-center group">
+                          <div 
+                            className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t hover:from-green-600 hover:to-green-500 transition-all"
+                            style={{ height: `${courier.early > 0 ? Math.max((courier.early / courier.total) * 100, 10) : 0}%` }}
+                          />
+                          <div className="text-[10px] font-bold text-green-700 mt-1">{courier.early}</div>
+                          <div className="text-[8px] text-gray-500">😄 Early</div>
+                        </div>
+                        
+                        {/* On-Time Bar */}
+                        <div className="flex-1 flex flex-col items-center group">
+                          <div 
+                            className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-600 hover:to-blue-500 transition-all"
+                            style={{ height: `${courier.onTime > 0 ? Math.max((courier.onTime / courier.total) * 100, 10) : 0}%` }}
+                          />
+                          <div className="text-[10px] font-bold text-blue-700 mt-1">{courier.onTime}</div>
+                          <div className="text-[8px] text-gray-500">🙂 On-Time</div>
+                        </div>
+                        
+                        {/* Late Bar */}
+                        <div className="flex-1 flex flex-col items-center group">
+                          <div 
+                            className="w-full bg-gradient-to-t from-red-500 to-red-400 rounded-t hover:from-red-600 hover:to-red-500 transition-all"
+                            style={{ height: `${courier.late > 0 ? Math.max((courier.late / courier.total) * 100, 10) : 0}%` }}
+                          />
+                          <div className="text-[10px] font-bold text-red-700 mt-1">{courier.late}</div>
+                          <div className="text-[8px] text-gray-500">😠 Late</div>
+                        </div>
+                      </div>
+                      <div className="text-[9px] text-center text-gray-500 mt-2 font-medium">
+                        Performance Breakdown
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
