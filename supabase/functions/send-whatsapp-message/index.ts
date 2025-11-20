@@ -12,18 +12,34 @@ serve(async (req) => {
   }
 
   try {
-    const { phone_number, message } = await req.json();
-
-    console.log("📥 Received send request for:", phone_number);
-    console.log("📝 Message:", message);
-
-    if (!phone_number || !message) {
-      console.error("❌ Missing required fields:", { phone_number, message });
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Verify JWT authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const { phone_number, message } = await req.json();
+
+    // Input validation
+    if (!phone_number || typeof phone_number !== 'string' || phone_number.length > 20) {
+      return new Response(JSON.stringify({ error: 'Invalid phone number' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!message || typeof message !== 'string' || message.length > 4096) {
+      return new Response(JSON.stringify({ error: 'Invalid message (max 4096 chars)' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log("📥 Received send request for:", phone_number);
+    console.log("📝 Message length:", message.length);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
