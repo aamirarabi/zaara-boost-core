@@ -680,7 +680,7 @@ const Orders = () => {
     doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`, 148.5, 26, { align: 'center' } as any);
     
     doc.setTextColor(0, 0, 0);
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 40,
       head: [['Metric', 'PostEx', 'Leopards']],
       body: [
@@ -713,7 +713,7 @@ const Orders = () => {
         ];
       });
       
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: 20,
         head: [['Order #', 'Customer', 'City', 'Dispatch', 'Delivered']],
         body: postexData,
@@ -740,7 +740,7 @@ const Orders = () => {
         ];
       });
       
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: 20,
         head: [['Order #', 'Customer', 'City', 'Dispatch', 'Delivered']],
         body: leopardsData,
@@ -756,54 +756,204 @@ const Orders = () => {
   const generateExcelReport = async (reportOrders: any[], stats: any, startDate: Date) => {
     const wb = XLSX.utils.book_new();
     
-    // Sheet 1: Summary
+    // Calculate performance stats
+    const calculateStats = (orders: any[]) => {
+      let early = 0, onTime = 0, oneDayLate = 0, twoPlusLate = 0;
+      
+      orders.forEach(o => {
+        if (!o.scheduled_delivery_date || !o.delivered_at) return;
+        
+        const slaDate = new Date(o.scheduled_delivery_date);
+        const deliveredDate = new Date(o.delivered_at);
+        slaDate.setHours(0, 0, 0, 0);
+        deliveredDate.setHours(0, 0, 0, 0);
+        const daysDiff = Math.round((deliveredDate.getTime() - slaDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff < 0) early++;
+        else if (daysDiff === 0) onTime++;
+        else if (daysDiff === 1) oneDayLate++;
+        else twoPlusLate++;
+      });
+      
+      const total = orders.length;
+      const onTimeRate = total > 0 ? Math.round(((early + onTime) / total) * 100) : 0;
+      
+      return { total, early, onTime, oneDayLate, twoPlusLate, late: oneDayLate + twoPlusLate, onTimeRate };
+    };
+    
+    const postexOrders = reportOrders.filter(o => o.courier_name === 'PostEx');
+    const leopardsOrders = reportOrders.filter(o => o.courier_name === 'Leopards');
+    const postexStats = calculateStats(postexOrders);
+    const leopardsStats = calculateStats(leopardsOrders);
+    
+    // ===== SHEET 1: EXECUTIVE SUMMARY =====
     const summaryData = [
-      ['COURIER PERFORMANCE REPORT'],
-      [`Period: ${stats.dateRange.start} to ${stats.dateRange.end}`],
+      ['📊 COURIER PERFORMANCE REPORT'],
+      [`Period: ${stats.dateRange.start} to ${stats.dateRange.end} (60 Days)`],
+      [`Generated: ${new Date().toLocaleString('en-GB')}`],
       [''],
-      ['Metric', 'PostEx', 'Leopards'],
-      ['Total Orders', stats.postex.total, stats.leopards.total],
-      ['On-Time Rate', `${stats.postex.onTimeRate}%`, `${stats.leopards.onTimeRate}%`],
-      ['Early', stats.postex.early, stats.leopards.early],
-      ['On-Time', stats.postex.onTime, stats.leopards.onTime],
-      ['Late', stats.postex.late, stats.leopards.late],
-      ['Average Delay', `${stats.postex.avgDelay} days`, `${stats.leopards.avgDelay} days`],
+      ['═══════════════════════════════════════════════════════════'],
+      ['📦 60-DAY DELIVERY STATUS'],
+      ['═══════════════════════════════════════════════════════════'],
+      [''],
+      ['Status', 'Count', 'Percentage', 'Rate'],
+      ['Delivered ✅', stats60Days.delivered, `${stats60Days.deliveryRate}%`, stats60Days.deliveryRate >= 80 ? 'Excellent' : stats60Days.deliveryRate >= 70 ? 'Good' : 'Needs Improvement'],
+      ['In Transit 🚚', stats60Days.inTransit, `${Math.round((stats60Days.inTransit / stats60Days.total) * 100)}%`, 'Active'],
+      ['Returned 🔄', stats60Days.returned, `${stats60Days.returnRate}%`, stats60Days.returnRate <= 3 ? 'Good' : 'High'],
+      ['Pending ⏳', stats60Days.pending, `${Math.round((stats60Days.pending / stats60Days.total) * 100)}%`, 'To Ship'],
+      ['TOTAL', stats60Days.total, '100%', ''],
+      [''],
+      ['═══════════════════════════════════════════════════════════'],
+      ['📮 COURIER COMPARISON'],
+      ['═══════════════════════════════════════════════════════════'],
+      [''],
+      ['Metric', 'PostEx 📮', 'Leopards 🐆', 'Winner'],
+      ['Total Orders', postexStats.total, leopardsStats.total, postexStats.total > leopardsStats.total ? 'PostEx' : 'Leopards'],
+      ['On-Time Rate', `${postexStats.onTimeRate}%`, `${leopardsStats.onTimeRate}%`, postexStats.onTimeRate > leopardsStats.onTimeRate ? 'PostEx ✅' : 'Leopards ✅'],
+      ['😄 Early Deliveries', postexStats.early, leopardsStats.early, postexStats.early > leopardsStats.early ? 'PostEx' : 'Leopards'],
+      ['🙂 On-Time Deliveries', postexStats.onTime, leopardsStats.onTime, postexStats.onTime > leopardsStats.onTime ? 'PostEx' : 'Leopards'],
+      ['😐 1 Day Late', postexStats.oneDayLate, leopardsStats.oneDayLate, postexStats.oneDayLate < leopardsStats.oneDayLate ? 'PostEx ✅' : 'Leopards ✅'],
+      ['😠 2+ Days Late', postexStats.twoPlusLate, leopardsStats.twoPlusLate, postexStats.twoPlusLate < leopardsStats.twoPlusLate ? 'PostEx ✅' : 'Leopards ✅'],
+      [''],
+      ['KEY INSIGHTS'],
+      [''],
+      ['PostEx Performance', postexStats.onTimeRate >= 70 ? '✅ GOOD' : '⚠️ NEEDS IMPROVEMENT', `${postexStats.onTimeRate}% on-time rate`],
+      ['Leopards Performance', leopardsStats.onTimeRate >= 70 ? '✅ GOOD' : '⚠️ NEEDS IMPROVEMENT', `${leopardsStats.onTimeRate}% on-time rate`],
+      ['Recommended Courier', postexStats.onTimeRate > leopardsStats.onTimeRate ? 'PostEx 📮' : 'Leopards 🐆', `Better performance overall`],
     ];
+    
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+    wsSummary['!cols'] = [
+      { wch: 35 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 20 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsSummary, '📊 Summary');
     
-    // Sheet 2: PostEx Orders
-    const postexOrders = reportOrders.filter(o => o.courier_name === 'PostEx').map(o => {
-      const shippingAddress = o.shipping_address || {};
-      return {
-        'Order #': o.order_number,
-        'Customer': o.customer_name,
-        'Phone': o.customer_phone,
-        'City': shippingAddress.city,
-        'Dispatch Date': o.fulfilled_at ? format(new Date(o.fulfilled_at), 'dd/MM/yyyy') : '',
-        'Delivered Date': o.delivered_at ? format(new Date(o.delivered_at), 'dd/MM/yyyy') : '',
-      };
+    // ===== SHEET 2: POSTEX DETAILED ORDERS =====
+    const postexData = [
+      [`📮 PostEx Orders - ${postexOrders.length} Total`],
+      [`Performance: 😄 ${postexStats.early} Early | 🙂 ${postexStats.onTime} On-Time | 😐 ${postexStats.oneDayLate} 1d Late | 😠 ${postexStats.twoPlusLate} 2+ Late`],
+      [`✅ On-Time Rate: ${postexStats.onTimeRate}%`],
+      [''],
+      ['Order Number', 'Customer Name', 'Phone', 'City', 'Product', 'Order Date', 'Dispatch Date', 'SLA Date', 'Delivered Date', '😊 Performance', 'Days', 'Status']
+    ];
+    
+    postexOrders.forEach(order => {
+      if (!order.scheduled_delivery_date || !order.delivered_at) return;
+      
+      const slaDate = new Date(order.scheduled_delivery_date);
+      const deliveredDate = new Date(order.delivered_at);
+      slaDate.setHours(0, 0, 0, 0);
+      deliveredDate.setHours(0, 0, 0, 0);
+      
+      const daysDiff = Math.round((deliveredDate.getTime() - slaDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      let emoji = '🙂';
+      let performance = 'On-Time';
+      
+      if (daysDiff < 0) {
+        emoji = '😄';
+        performance = `${Math.abs(daysDiff)}d Early`;
+      } else if (daysDiff === 1) {
+        emoji = '😐';
+        performance = '1d Late';
+      } else if (daysDiff > 1) {
+        emoji = '😠';
+        performance = `${daysDiff}d Late`;
+      }
+      
+      postexData.push([
+        order.order_number || 'N/A',
+        order.customer_name || 'N/A',
+        order.customer_phone || 'N/A',
+        order.shipping_address?.city || 'N/A',
+        order.line_items?.[0]?.title?.substring(0, 40) || 'N/A',
+        new Date(order.created_at).toLocaleDateString('en-GB'),
+        new Date(order.fulfilled_at).toLocaleDateString('en-GB'),
+        slaDate.toLocaleDateString('en-GB'),
+        deliveredDate.toLocaleDateString('en-GB'),
+        `${emoji} ${performance}`,
+        daysDiff,
+        order.fulfillment_status
+      ]);
     });
-    const wsPostex = XLSX.utils.json_to_sheet(postexOrders);
-    XLSX.utils.book_append_sheet(wb, wsPostex, 'PostEx Orders');
     
-    // Sheet 3: Leopards Orders
-    const leopardsOrders = reportOrders.filter(o => o.courier_name === 'Leopards').map(o => {
-      const shippingAddress = o.shipping_address || {};
-      return {
-        'Order #': o.order_number,
-        'Customer': o.customer_name,
-        'Phone': o.customer_phone,
-        'City': shippingAddress.city,
-        'Dispatch Date': o.fulfilled_at ? format(new Date(o.fulfilled_at), 'dd/MM/yyyy') : '',
-        'Delivered Date': o.delivered_at ? format(new Date(o.delivered_at), 'dd/MM/yyyy') : '',
-      };
+    const wsPostex = XLSX.utils.aoa_to_sheet(postexData);
+    wsPostex['!cols'] = [
+      { wch: 16 }, // Order #
+      { wch: 22 }, // Customer
+      { wch: 15 }, // Phone
+      { wch: 15 }, // City
+      { wch: 35 }, // Product
+      { wch: 12 }, // Order Date
+      { wch: 12 }, // Dispatch
+      { wch: 12 }, // SLA
+      { wch: 12 }, // Delivered
+      { wch: 18 }, // Performance
+      { wch: 8 },  // Days
+      { wch: 12 }  // Status
+    ];
+    XLSX.utils.book_append_sheet(wb, wsPostex, '📮 PostEx Orders');
+    
+    // ===== SHEET 3: LEOPARDS DETAILED ORDERS =====
+    const leopardsData = [
+      [`🐆 Leopards Orders - ${leopardsOrders.length} Total`],
+      [`Performance: 😄 ${leopardsStats.early} Early | 🙂 ${leopardsStats.onTime} On-Time | 😐 ${leopardsStats.oneDayLate} 1d Late | 😠 ${leopardsStats.twoPlusLate} 2+ Late`],
+      [`✅ On-Time Rate: ${leopardsStats.onTimeRate}%`],
+      [''],
+      ['Order Number', 'Customer Name', 'Phone', 'City', 'Product', 'Order Date', 'Dispatch Date', 'SLA Date', 'Delivered Date', '😊 Performance', 'Days', 'Status']
+    ];
+    
+    leopardsOrders.forEach(order => {
+      if (!order.scheduled_delivery_date || !order.delivered_at) return;
+      
+      const slaDate = new Date(order.scheduled_delivery_date);
+      const deliveredDate = new Date(order.delivered_at);
+      slaDate.setHours(0, 0, 0, 0);
+      deliveredDate.setHours(0, 0, 0, 0);
+      
+      const daysDiff = Math.round((deliveredDate.getTime() - slaDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      let emoji = '🙂';
+      let performance = 'On-Time';
+      
+      if (daysDiff < 0) {
+        emoji = '😄';
+        performance = `${Math.abs(daysDiff)}d Early`;
+      } else if (daysDiff === 1) {
+        emoji = '😐';
+        performance = '1d Late';
+      } else if (daysDiff > 1) {
+        emoji = '😠';
+        performance = `${daysDiff}d Late`;
+      }
+      
+      leopardsData.push([
+        order.order_number || 'N/A',
+        order.customer_name || 'N/A',
+        order.customer_phone || 'N/A',
+        order.shipping_address?.city || 'N/A',
+        order.line_items?.[0]?.title?.substring(0, 40) || 'N/A',
+        new Date(order.created_at).toLocaleDateString('en-GB'),
+        new Date(order.fulfilled_at).toLocaleDateString('en-GB'),
+        slaDate.toLocaleDateString('en-GB'),
+        deliveredDate.toLocaleDateString('en-GB'),
+        `${emoji} ${performance}`,
+        daysDiff,
+        order.fulfillment_status
+      ]);
     });
-    const wsLeopards = XLSX.utils.json_to_sheet(leopardsOrders);
-    XLSX.utils.book_append_sheet(wb, wsLeopards, 'Leopards Orders');
     
+    const wsLeopards = XLSX.utils.aoa_to_sheet(leopardsData);
+    wsLeopards['!cols'] = wsPostex['!cols']; // Same column widths as PostEx
+    XLSX.utils.book_append_sheet(wb, wsLeopards, '🐆 Leopards Orders');
+    
+    // Save file
     const fileName = `Courier_Performance_${format(startDate, 'ddMMMyyyy')}_to_${format(new Date(), 'ddMMMyyyy')}.xlsx`;
     XLSX.writeFile(wb, fileName);
+    toast.success('📊 Professional Excel report generated!');
   };
 
   // Calculate 60-day delivery status - SIMPLIFIED & CORRECT
@@ -1326,98 +1476,98 @@ const Orders = () => {
         </div>
 
         {/* 60-Day Delivery Status Summary - COMPACT VERSION */}
-        <div className="mb-6">
+        <div className="mb-3">
           <Card className="border-2 border-blue-500 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2">
+            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-1.5 px-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <Package className="h-5 w-5" />
+                  <CardTitle className="text-sm font-bold flex items-center gap-1.5">
+                    <Package className="h-4 w-4" />
                     Last 60 Days Delivery Status
                   </CardTitle>
-                  <p className="text-xs text-blue-100 mt-1">
+                  <p className="text-[9px] text-blue-100">
                     {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} - {new Date().toLocaleDateString('en-GB')}
                   </p>
                 </div>
-                <Badge variant="secondary" className="text-sm px-3 py-1">
+                <Badge variant="secondary" className="text-[9px] px-2 py-0">
                   {stats60Days.total} Total
                 </Badge>
               </div>
             </CardHeader>
             
-            <CardContent className="py-2 px-3">
+            <CardContent className="py-1.5 px-2">
               {/* Compact Grid */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 {/* Delivered */}
-                <div className="text-center p-2 bg-green-50 border border-green-200 rounded">
-                  <div className="text-xl mb-0.5">📦</div>
-                  <div className="text-xl font-bold text-green-700">
+                <div className="text-center p-1.5 bg-green-50 border border-green-200 rounded">
+                  <div className="text-lg mb-0">📦</div>
+                  <div className="text-lg font-bold text-green-700">
                     {stats60Days.delivered}
                   </div>
-                  <div className="text-[10px] font-medium text-green-900 mt-1">
+                  <div className="text-[9px] font-medium text-green-900">
                     Delivered
                   </div>
-                  <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0 mt-0.5">
+                  <Badge className="bg-green-600 text-white text-[9px] px-1 py-0 mt-0">
                     {stats60Days.deliveryRate}%
                   </Badge>
                 </div>
                 
                 {/* In Transit */}
-                <div className="text-center p-2 bg-blue-50 border border-blue-200 rounded">
-                  <div className="text-xl mb-0.5">🚚</div>
-                  <div className="text-xl font-bold text-blue-700">
+                <div className="text-center p-1.5 bg-blue-50 border border-blue-200 rounded">
+                  <div className="text-lg mb-0">🚚</div>
+                  <div className="text-lg font-bold text-blue-700">
                     {stats60Days.inTransit}
                   </div>
-                  <div className="text-[10px] font-medium text-blue-900 mt-1">
+                  <div className="text-[9px] font-medium text-blue-900">
                     In Transit
                   </div>
-                  <Badge variant="outline" className="border-blue-600 text-blue-700 text-[10px] px-1.5 py-0 mt-0.5">
+                  <Badge variant="outline" className="border-blue-600 text-blue-700 text-[9px] px-1 py-0 mt-0">
                     On the way
                   </Badge>
                 </div>
                 
                 {/* Returned */}
-                <div className="text-center p-2 bg-red-50 border border-red-200 rounded">
-                  <div className="text-xl mb-0.5">🔄</div>
-                  <div className="text-xl font-bold text-red-700">
+                <div className="text-center p-1.5 bg-red-50 border border-red-200 rounded">
+                  <div className="text-lg mb-0">🔄</div>
+                  <div className="text-lg font-bold text-red-700">
                     {stats60Days.returned}
                   </div>
-                  <div className="text-[10px] font-medium text-red-900 mt-1">
+                  <div className="text-[9px] font-medium text-red-900">
                     Returned
                   </div>
-                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 mt-0.5">
+                  <Badge variant="destructive" className="text-[9px] px-1 py-0 mt-0">
                     {stats60Days.returnRate}%
                   </Badge>
                 </div>
                 
                 {/* Pending */}
-                <div className="text-center p-2 bg-orange-50 border border-orange-200 rounded">
-                  <div className="text-xl mb-0.5">⏳</div>
-                  <div className="text-xl font-bold text-orange-700">
+                <div className="text-center p-1.5 bg-orange-50 border border-orange-200 rounded">
+                  <div className="text-lg mb-0">⏳</div>
+                  <div className="text-lg font-bold text-orange-700">
                     {stats60Days.pending}
                   </div>
-                  <div className="text-[10px] font-medium text-orange-900 mt-1">
+                  <div className="text-[9px] font-medium text-orange-900">
                     Pending
                   </div>
-                  <Badge className="bg-orange-600 text-white text-[10px] px-1.5 py-0 mt-0.5">
+                  <Badge className="bg-orange-600 text-white text-[9px] px-1 py-0 mt-0">
                     To Ship
                   </Badge>
                 </div>
               </div>
               
               {/* Compact Summary Bar */}
-              <div className="mt-2 pt-2 border-t flex justify-around text-center text-[10px]">
+              <div className="mt-1.5 pt-1.5 border-t flex justify-around text-center text-[9px]">
                 <div>
                   <div className="text-muted-foreground mb-0.5">Success</div>
-                  <div className="text-sm font-bold text-green-600">{stats60Days.deliveryRate}%</div>
+                  <div className="text-xs font-bold text-green-600">{stats60Days.deliveryRate}%</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground mb-0.5">Active</div>
-                  <div className="text-sm font-bold text-blue-600">{stats60Days.inTransit + stats60Days.pending}</div>
+                  <div className="text-xs font-bold text-blue-600">{stats60Days.inTransit + stats60Days.pending}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground mb-0.5">Returns</div>
-                  <div className="text-sm font-bold text-red-600">{stats60Days.returned}</div>
+                  <div className="text-xs font-bold text-red-600">{stats60Days.returned}</div>
                 </div>
               </div>
             </CardContent>
