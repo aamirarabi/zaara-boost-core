@@ -43,41 +43,23 @@ Deno.serve(async (req) => {
     oneYearAgo.setDate(oneYearAgo.getDate() - 365);
     
     console.log('Fetching PostEx orders...');
-    const allPostexOrders: any[] = [];
-    let postexFrom = 0;
-    const postexBatchSize = 1000;
-    let hasMorePostex = true;
 
-    while (hasMorePostex) {
-      const { data: batch, error } = await supabase
-        .from('shopify_orders')
-        .select('order_id, order_number, tracking_number, courier_name')
-        .eq('courier_name', 'PostEx')
-        .not('tracking_number', 'is', null)
-        .gte('created_at', oneYearAgo.toISOString())
-        .range(postexFrom, postexFrom + postexBatchSize - 1);
-      
-      if (error) {
-        console.error('Error fetching PostEx batch:', error);
-        break;
-      }
-      
-      if (!batch || batch.length === 0) {
-        hasMorePostex = false;
-        break;
-      }
-      
-      allPostexOrders.push(...batch);
-      console.log(`Fetched ${allPostexOrders.length} PostEx orders so far...`);
-      
-      if (batch.length < postexBatchSize) {
-        hasMorePostex = false;
-      }
-      
-      postexFrom += postexBatchSize;
+    // For PostEx: Only fetch last 30 days to avoid timeout
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: postexOrders, error: postexError } = await supabase
+      .from('shopify_orders')
+      .select('order_id, order_number, tracking_number, courier_name')
+      .eq('courier_name', 'PostEx')
+      .not('tracking_number', 'is', null)
+      .gte('created_at', thirtyDaysAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    if (postexError) {
+      console.error('Error fetching PostEx orders:', postexError);
     }
-
-    const postexOrders = allPostexOrders;
 
     console.log('Fetching Leopards orders...');
     const allLeopardsOrders: any[] = [];
