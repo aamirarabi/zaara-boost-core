@@ -806,47 +806,59 @@ const Orders = () => {
     XLSX.writeFile(wb, fileName);
   };
 
-  // Calculate 60-day delivery status
+  // Calculate 60-day delivery status - SIMPLIFIED & CORRECT
   const calculate60DayStats = () => {
     const sixtyDaysAgo = new Date();
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
     
+    // Get all orders from last 60 days
     const last60DaysOrders = orders.filter((order: any) => {
       const orderDate = new Date(order.created_at);
       return orderDate >= sixtyDaysAgo;
     });
     
-    const delivered = last60DaysOrders.filter((o: any) => 
-      o.delivered_at !== null && o.delivered_at !== undefined
-    ).length;
+    const total = last60DaysOrders.length;
     
-    const returned = last60DaysOrders.filter((o: any) => 
-      o.fulfillment_status === 'returned' || 
-      o.financial_status === 'refunded' ||
-      o.cancelled_at !== null
-    ).length;
+    // DELIVERED: Has delivered_at date AND not cancelled
+    const delivered = last60DaysOrders.filter((o: any) => {
+      return o.delivered_at && !o.cancelled_at;
+    }).length;
     
-    const inTransit = last60DaysOrders.filter((o: any) => 
-      o.fulfillment_status === 'fulfilled' && 
-      !o.delivered_at &&
-      !o.cancelled_at
-    ).length;
+    // IN TRANSIT: Fulfilled but no delivered_at yet AND not cancelled
+    const inTransit = last60DaysOrders.filter((o: any) => {
+      return o.fulfillment_status === 'fulfilled' && 
+             !o.delivered_at && 
+             !o.cancelled_at;
+    }).length;
     
-    const pending = last60DaysOrders.filter((o: any) => 
-      o.fulfillment_status === 'pending' ||
-      o.fulfillment_status === 'unfulfilled' ||
-      o.fulfillment_status === null
-    ).length;
+    // PENDING: Not fulfilled yet AND not cancelled
+    const pending = last60DaysOrders.filter((o: any) => {
+      const isPending = !o.fulfillment_status || 
+                        o.fulfillment_status === 'unfulfilled' || 
+                        o.fulfillment_status === 'pending' ||
+                        o.fulfillment_status === '';
+      return isPending && !o.cancelled_at;
+    }).length;
+    
+    // RETURNED: Has cancelled_at OR financial_status is refunded
+    const returned = last60DaysOrders.filter((o: any) => {
+      return o.cancelled_at || 
+             o.financial_status === 'refunded' || 
+             o.financial_status === 'partially_refunded';
+    }).length;
+    
+    // Calculate rates
+    const deliveryRate = total > 0 ? Math.round((delivered / total) * 100) : 0;
+    const returnRate = total > 0 ? Math.round((returned / total) * 100) : 0;
     
     return {
-      total: last60DaysOrders.length,
+      total,
       delivered,
-      returned,
       inTransit,
       pending,
-      deliveryRate: last60DaysOrders.length > 0 
-        ? Math.round((delivered / last60DaysOrders.length) * 100)
-        : 0
+      returned,
+      deliveryRate,
+      returnRate
     };
   };
 
@@ -1070,106 +1082,99 @@ const Orders = () => {
           </Card>
         </div>
 
-        {/* 60-Day Delivery Status Summary - Prominent Box */}
+        {/* 60-Day Delivery Status Summary - COMPACT VERSION */}
         <div className="mb-6">
-          <Card className="border-2 border-blue-500 shadow-xl bg-gradient-to-br from-blue-50 via-white to-purple-50">
-            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+          <Card className="border-2 border-blue-500 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Package className="h-6 w-6" />
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    <Package className="h-5 w-5" />
                     Last 60 Days Delivery Status
                   </CardTitle>
-                  <p className="text-sm text-blue-100 mt-1">
+                  <p className="text-xs text-blue-100 mt-1">
                     {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} - {new Date().toLocaleDateString('en-GB')}
                   </p>
                 </div>
-                <Badge variant="secondary" className="text-lg px-4 py-2">
-                  {stats60Days.total} Total Orders
+                <Badge variant="secondary" className="text-sm px-3 py-1">
+                  {stats60Days.total} Total
                 </Badge>
               </div>
             </CardHeader>
             
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <CardContent className="py-4">
+              {/* Compact Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {/* Delivered */}
-                <div className="text-center p-4 bg-green-50 border-2 border-green-200 rounded-lg hover:shadow-lg transition-shadow">
-                  <div className="text-5xl mb-3">📦</div>
-                  <div className="text-4xl font-bold text-green-700 mb-2">
+                <div className="text-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="text-3xl mb-1">📦</div>
+                  <div className="text-2xl font-bold text-green-700">
                     {stats60Days.delivered}
                   </div>
-                  <div className="text-sm font-semibold text-green-900 mb-1">
+                  <div className="text-xs font-medium text-green-900 mt-1">
                     Delivered
                   </div>
-                  <Badge className="bg-green-600 text-white">
-                    {stats60Days.deliveryRate}% Success Rate
+                  <Badge className="bg-green-600 text-white text-xs mt-1">
+                    {stats60Days.deliveryRate}%
                   </Badge>
                 </div>
                 
                 {/* In Transit */}
-                <div className="text-center p-4 bg-blue-50 border-2 border-blue-200 rounded-lg hover:shadow-lg transition-shadow">
-                  <div className="text-5xl mb-3">🚚</div>
-                  <div className="text-4xl font-bold text-blue-700 mb-2">
+                <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-3xl mb-1">🚚</div>
+                  <div className="text-2xl font-bold text-blue-700">
                     {stats60Days.inTransit}
                   </div>
-                  <div className="text-sm font-semibold text-blue-900 mb-1">
+                  <div className="text-xs font-medium text-blue-900 mt-1">
                     In Transit
                   </div>
-                  <Badge variant="outline" className="border-blue-600 text-blue-700">
+                  <Badge variant="outline" className="border-blue-600 text-blue-700 text-xs mt-1">
                     On the way
                   </Badge>
                 </div>
                 
                 {/* Returned */}
-                <div className="text-center p-4 bg-red-50 border-2 border-red-200 rounded-lg hover:shadow-lg transition-shadow">
-                  <div className="text-5xl mb-3">🔄</div>
-                  <div className="text-4xl font-bold text-red-700 mb-2">
+                <div className="text-center p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="text-3xl mb-1">🔄</div>
+                  <div className="text-2xl font-bold text-red-700">
                     {stats60Days.returned}
                   </div>
-                  <div className="text-sm font-semibold text-red-900 mb-1">
+                  <div className="text-xs font-medium text-red-900 mt-1">
                     Returned
                   </div>
-                  <Badge variant="destructive">
-                    {stats60Days.total > 0 
-                      ? Math.round((stats60Days.returned / stats60Days.total) * 100)
-                      : 0}% Return Rate
+                  <Badge variant="destructive" className="text-xs mt-1">
+                    {stats60Days.returnRate}%
                   </Badge>
                 </div>
                 
                 {/* Pending */}
-                <div className="text-center p-4 bg-orange-50 border-2 border-orange-200 rounded-lg hover:shadow-lg transition-shadow">
-                  <div className="text-5xl mb-3">⏳</div>
-                  <div className="text-4xl font-bold text-orange-700 mb-2">
+                <div className="text-center p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="text-3xl mb-1">⏳</div>
+                  <div className="text-2xl font-bold text-orange-700">
                     {stats60Days.pending}
                   </div>
-                  <div className="text-sm font-semibold text-orange-900 mb-1">
+                  <div className="text-xs font-medium text-orange-900 mt-1">
                     Pending
                   </div>
-                  <Badge className="bg-orange-600 text-white">
-                    Awaiting Fulfillment
+                  <Badge className="bg-orange-600 text-white text-xs mt-1">
+                    To Ship
                   </Badge>
                 </div>
               </div>
               
-              {/* Quick Insights Bar */}
-              <div className="mt-6 pt-4 border-t grid grid-cols-3 gap-4 text-center">
+              {/* Compact Summary Bar */}
+              <div className="mt-3 pt-3 border-t flex justify-around text-center text-xs">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Successful Deliveries</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {stats60Days.deliveryRate}%
-                  </div>
+                  <div className="text-muted-foreground mb-0.5">Success</div>
+                  <div className="text-lg font-bold text-green-600">{stats60Days.deliveryRate}%</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Active Shipments</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {stats60Days.inTransit + stats60Days.pending}
-                  </div>
+                  <div className="text-muted-foreground mb-0.5">Active</div>
+                  <div className="text-lg font-bold text-blue-600">{stats60Days.inTransit + stats60Days.pending}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Issues (Returns)</div>
-                  <div className="text-2xl font-bold text-red-600">
-                    {stats60Days.returned}
-                  </div>
+                  <div className="text-muted-foreground mb-0.5">Returns</div>
+                  <div className="text-lg font-bold text-red-600">{stats60Days.returned}</div>
                 </div>
               </div>
             </CardContent>
@@ -1316,10 +1321,6 @@ const Orders = () => {
                     <span className="text-blue-700 font-medium">SLA ETA (Our Promise)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-orange-600"></div>
-                    <span className="text-orange-700 font-medium">Courier ETA (Live from Leopards)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-green-600"></div>
                     <span className="text-green-700 font-medium">Delivered (Actual)</span>
                   </div>
@@ -1343,7 +1344,6 @@ const Orders = () => {
                   <TableHead className="hidden lg:table-cell">Source</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead className="hidden md:table-cell text-blue-700 font-semibold">SLA ETA</TableHead>
-                  <TableHead className="hidden md:table-cell text-orange-700 font-semibold">Courier ETA</TableHead>
                   <TableHead className="text-green-700 font-semibold">Delivered</TableHead>
                   <TableHead className="hidden md:table-cell">Performance</TableHead>
                   <TableHead>Status</TableHead>
@@ -1457,22 +1457,22 @@ const Orders = () => {
                           ? formatPakistanDate(order.scheduled_delivery_date)
                           : slaEta}
                       </TableCell>
-                      <TableCell className="text-sm hidden md:table-cell text-orange-700 font-medium">
-                        {order.courier_estimated_delivery 
-                          ? formatPakistanDate(order.courier_estimated_delivery)
-                          : "—"}
-                      </TableCell>
                       <TableCell className={`text-sm font-medium ${order.delivered_at ? 'text-green-700 font-semibold' : 'text-gray-400'}`}>
                         {deliveredDate}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {delayDisplay ? (
-                          <div className="flex justify-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">
+                              {delayDays! < 0 ? '😄' : delayDays === 0 ? '🙂' : delayDays === 1 ? '😐' : '😠'}
+                            </span>
                             <Badge className={
                               delayDays! < 0 
                                 ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-100'
                                 : delayDays === 0
                                 ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-100'
+                                : delayDays === 1
+                                ? 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-100'
                                 : 'bg-red-100 text-red-800 border-red-300 hover:bg-red-100'
                             }>
                               {delayDisplay}
