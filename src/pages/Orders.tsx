@@ -806,6 +806,52 @@ const Orders = () => {
     XLSX.writeFile(wb, fileName);
   };
 
+  // Calculate 60-day delivery status
+  const calculate60DayStats = () => {
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    
+    const last60DaysOrders = orders.filter((order: any) => {
+      const orderDate = new Date(order.created_at);
+      return orderDate >= sixtyDaysAgo;
+    });
+    
+    const delivered = last60DaysOrders.filter((o: any) => 
+      o.delivered_at !== null && o.delivered_at !== undefined
+    ).length;
+    
+    const returned = last60DaysOrders.filter((o: any) => 
+      o.fulfillment_status === 'returned' || 
+      o.financial_status === 'refunded' ||
+      o.cancelled_at !== null
+    ).length;
+    
+    const inTransit = last60DaysOrders.filter((o: any) => 
+      o.fulfillment_status === 'fulfilled' && 
+      !o.delivered_at &&
+      !o.cancelled_at
+    ).length;
+    
+    const pending = last60DaysOrders.filter((o: any) => 
+      o.fulfillment_status === 'pending' ||
+      o.fulfillment_status === 'unfulfilled' ||
+      o.fulfillment_status === null
+    ).length;
+    
+    return {
+      total: last60DaysOrders.length,
+      delivered,
+      returned,
+      inTransit,
+      pending,
+      deliveryRate: last60DaysOrders.length > 0 
+        ? Math.round((delivered / last60DaysOrders.length) * 100)
+        : 0
+    };
+  };
+
+  const stats60Days = calculate60DayStats();
+
   const filteredOrders = orders.filter(
     (order) =>
       order.order_number?.includes(searchQuery) ||
@@ -1019,6 +1065,112 @@ const Orders = () => {
               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                 <span className="text-green-600 font-medium">{stats.last24HoursFulfilled} fulfilled</span>
                 <span className="text-orange-600 font-medium">{stats.last24HoursPending} pending</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 60-Day Delivery Status Summary - Prominent Box */}
+        <div className="mb-6">
+          <Card className="border-2 border-blue-500 shadow-xl bg-gradient-to-br from-blue-50 via-white to-purple-50">
+            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Package className="h-6 w-6" />
+                    Last 60 Days Delivery Status
+                  </CardTitle>
+                  <p className="text-sm text-blue-100 mt-1">
+                    {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} - {new Date().toLocaleDateString('en-GB')}
+                  </p>
+                </div>
+                <Badge variant="secondary" className="text-lg px-4 py-2">
+                  {stats60Days.total} Total Orders
+                </Badge>
+              </div>
+            </CardHeader>
+            
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Delivered */}
+                <div className="text-center p-4 bg-green-50 border-2 border-green-200 rounded-lg hover:shadow-lg transition-shadow">
+                  <div className="text-5xl mb-3">📦</div>
+                  <div className="text-4xl font-bold text-green-700 mb-2">
+                    {stats60Days.delivered}
+                  </div>
+                  <div className="text-sm font-semibold text-green-900 mb-1">
+                    Delivered
+                  </div>
+                  <Badge className="bg-green-600 text-white">
+                    {stats60Days.deliveryRate}% Success Rate
+                  </Badge>
+                </div>
+                
+                {/* In Transit */}
+                <div className="text-center p-4 bg-blue-50 border-2 border-blue-200 rounded-lg hover:shadow-lg transition-shadow">
+                  <div className="text-5xl mb-3">🚚</div>
+                  <div className="text-4xl font-bold text-blue-700 mb-2">
+                    {stats60Days.inTransit}
+                  </div>
+                  <div className="text-sm font-semibold text-blue-900 mb-1">
+                    In Transit
+                  </div>
+                  <Badge variant="outline" className="border-blue-600 text-blue-700">
+                    On the way
+                  </Badge>
+                </div>
+                
+                {/* Returned */}
+                <div className="text-center p-4 bg-red-50 border-2 border-red-200 rounded-lg hover:shadow-lg transition-shadow">
+                  <div className="text-5xl mb-3">🔄</div>
+                  <div className="text-4xl font-bold text-red-700 mb-2">
+                    {stats60Days.returned}
+                  </div>
+                  <div className="text-sm font-semibold text-red-900 mb-1">
+                    Returned
+                  </div>
+                  <Badge variant="destructive">
+                    {stats60Days.total > 0 
+                      ? Math.round((stats60Days.returned / stats60Days.total) * 100)
+                      : 0}% Return Rate
+                  </Badge>
+                </div>
+                
+                {/* Pending */}
+                <div className="text-center p-4 bg-orange-50 border-2 border-orange-200 rounded-lg hover:shadow-lg transition-shadow">
+                  <div className="text-5xl mb-3">⏳</div>
+                  <div className="text-4xl font-bold text-orange-700 mb-2">
+                    {stats60Days.pending}
+                  </div>
+                  <div className="text-sm font-semibold text-orange-900 mb-1">
+                    Pending
+                  </div>
+                  <Badge className="bg-orange-600 text-white">
+                    Awaiting Fulfillment
+                  </Badge>
+                </div>
+              </div>
+              
+              {/* Quick Insights Bar */}
+              <div className="mt-6 pt-4 border-t grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Successful Deliveries</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {stats60Days.deliveryRate}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Active Shipments</div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {stats60Days.inTransit + stats60Days.pending}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Issues (Returns)</div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {stats60Days.returned}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
