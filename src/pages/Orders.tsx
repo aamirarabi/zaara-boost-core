@@ -1162,23 +1162,67 @@ const Orders = () => {
   const exportPerformanceToExcel = async () => {
     try {
       setExporting(true);
-      toast.info('Generating Excel report...');
+      toast.info('Generating professional Excel report...');
       
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - exportDays);
       
-      // Filter orders
-      const exportOrders = orders.filter((order: any) => {
-        const orderDate = new Date(order.created_at);
-        return orderDate >= startDate && orderDate <= endDate;
+      // Filter: DELIVERED orders in date range + OVERDUE orders
+      const deliveredOrders = orders.filter((order: any) => {
+        if (!order.delivered_at) return false;
+        const deliveredDate = new Date(order.delivered_at);
+        return deliveredDate >= startDate && deliveredDate <= endDate;
       });
       
-      const postexOrders = exportOrders.filter(o => o.courier_name === 'PostEx' && o.delivered_at && o.scheduled_delivery_date);
-      const leopardsOrders = exportOrders.filter(o => o.courier_name === 'Leopards' && o.delivered_at && o.scheduled_delivery_date);
+      // Overdue orders: SLA date passed but not delivered
+      const overdueOrders = orders.filter((order: any) => {
+        if (order.delivered_at) return false; // Already delivered
+        if (!order.scheduled_delivery_date) return false;
+        const slaDate = new Date(order.scheduled_delivery_date);
+        return slaDate < new Date(); // SLA passed
+      });
       
-      // Helper to calculate performance
+      const reportOrders = [...deliveredOrders, ...overdueOrders];
+      
+      const postexOrders = reportOrders.filter(o => o.courier_name === 'PostEx');
+      const leopardsOrders = reportOrders.filter(o => o.courier_name === 'Leopards');
+      
+      // Calculate statistics
+      const calculateStats = (orders: any[]) => {
+        const delivered = orders.filter(o => o.delivered_at);
+        let early = 0, onTime = 0, late = 0, totalDelayDays = 0;
+        
+        delivered.forEach(o => {
+          if (!o.scheduled_delivery_date) return;
+          const slaDate = new Date(o.scheduled_delivery_date);
+          const deliveredDate = new Date(o.delivered_at);
+          slaDate.setHours(0, 0, 0, 0);
+          deliveredDate.setHours(0, 0, 0, 0);
+          const daysDiff = Math.round((deliveredDate.getTime() - slaDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysDiff < 0) early++;
+          else if (daysDiff === 0) onTime++;
+          else {
+            late++;
+            totalDelayDays += daysDiff;
+          }
+        });
+        
+        const onTimeRate = delivered.length > 0 ? Math.round(((early + onTime) / delivered.length) * 100) : 0;
+        const avgDelay = late > 0 ? (totalDelayDays / late).toFixed(1) : 0;
+        
+        return { total: orders.length, delivered: delivered.length, early, onTime, late, onTimeRate, avgDelay };
+      };
+      
+      const postexStats = calculateStats(postexOrders);
+      const leopardsStats = calculateStats(leopardsOrders);
+      const overallStats = calculateStats(reportOrders);
+      
+      // Helper functions
       const getPerformanceText = (order: any) => {
+        if (!order.delivered_at) return '⏰ OVERDUE';
+        if (!order.scheduled_delivery_date) return 'N/A';
         const slaDate = new Date(order.scheduled_delivery_date);
         const deliveredDate = new Date(order.delivered_at);
         slaDate.setHours(0, 0, 0, 0);
@@ -1190,54 +1234,101 @@ const Orders = () => {
         return `😠 ${daysDiff}d Late`;
       };
       
-      // Calculate on-time rate
-      const calculateOnTimeRate = (orders: any[]) => {
-        let onTimeCount = 0;
-        orders.forEach(o => {
-          const slaDate = new Date(o.scheduled_delivery_date);
-          const deliveredDate = new Date(o.delivered_at);
-          slaDate.setHours(0, 0, 0, 0);
-          deliveredDate.setHours(0, 0, 0, 0);
-          if (deliveredDate.getTime() <= slaDate.getTime()) onTimeCount++;
-        });
-        return orders.length > 0 ? Math.round((onTimeCount / orders.length) * 100) : 0;
-      };
-      
       // Create workbook
       const wb = XLSX.utils.book_new();
       
-      // ===== SHEET 1: SUMMARY =====
+      // ===== SHEET 1: COMPREHENSIVE SUMMARY =====
       const summaryData = [
-        ['COURIER PERFORMANCE REPORT'],
-        [`Period: ${startDate.toLocaleDateString('en-GB')} to ${endDate.toLocaleDateString('en-GB')}`],
-        [`Generated: ${new Date().toLocaleString('en-GB')}`],
+        ['COURIER PERFORMANCE REPORT - PROFESSIONAL ANALYSIS'],
+        [`Report Period: ${startDate.toLocaleDateString('en-GB')} to ${endDate.toLocaleDateString('en-GB')} (${exportDays} days)`],
+        [`Generated: ${new Date().toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })}`],
         [''],
-        ['60-DAY DELIVERY STATUS'],
+        ['═══════════════════════════════════════════════════════'],
+        ['EXECUTIVE SUMMARY'],
+        ['═══════════════════════════════════════════════════════'],
         [''],
-        ['Status', 'Count', 'Percentage'],
-        ['Delivered', stats60Days.delivered, `${stats60Days.deliveryRate}%`],
-        ['In Transit', stats60Days.inTransit, `${Math.round((stats60Days.inTransit / stats60Days.total) * 100)}%`],
-        ['Returned', stats60Days.returned, `${stats60Days.returnRate}%`],
-        ['Pending', stats60Days.pending, `${Math.round((stats60Days.pending / stats60Days.total) * 100)}%`],
-        ['Total', stats60Days.total, '100%'],
+        ['Metric', 'PostEx', 'Leopards', 'Overall'],
+        ['Total Orders', postexStats.total, leopardsStats.total, overallStats.total],
+        ['Delivered Orders', postexStats.delivered, leopardsStats.delivered, overallStats.delivered],
+        ['On-Time Rate', `${postexStats.onTimeRate}%`, `${leopardsStats.onTimeRate}%`, `${overallStats.onTimeRate}%`],
+        ['Early Deliveries', postexStats.early, leopardsStats.early, overallStats.early],
+        ['On-Time Deliveries', postexStats.onTime, leopardsStats.onTime, overallStats.onTime],
+        ['Late Deliveries', postexStats.late, leopardsStats.late, overallStats.late],
+        ['Avg Delay (Days)', postexStats.avgDelay, leopardsStats.avgDelay, overallStats.avgDelay],
+        ['Overdue Orders', overdueOrders.filter(o => o.courier_name === 'PostEx').length, overdueOrders.filter(o => o.courier_name === 'Leopards').length, overdueOrders.length],
         [''],
-        ['COURIER COMPARISON'],
+        ['═══════════════════════════════════════════════════════'],
+        ['PERFORMANCE ANALYSIS'],
+        ['═══════════════════════════════════════════════════════'],
         [''],
-        ['Courier', 'Total Orders', 'On-Time Rate'],
-        ['PostEx', postexOrders.length, `${calculateOnTimeRate(postexOrders)}%`],
-        ['Leopards', leopardsOrders.length, `${calculateOnTimeRate(leopardsOrders)}%`],
+        ['Winner', postexStats.onTimeRate > leopardsStats.onTimeRate ? '🏆 PostEx' : '🏆 Leopards'],
+        ['Performance Gap', `${Math.abs(postexStats.onTimeRate - leopardsStats.onTimeRate)}% difference`],
+        [''],
+        ['Best Courier', postexStats.onTimeRate > leopardsStats.onTimeRate ? 'PostEx' : 'Leopards'],
+        ['Reason', postexStats.onTimeRate > leopardsStats.onTimeRate 
+          ? `PostEx delivers ${Math.abs(postexStats.onTimeRate - leopardsStats.onTimeRate)}% more orders on-time`
+          : `Leopards delivers ${Math.abs(postexStats.onTimeRate - leopardsStats.onTimeRate)}% more orders on-time`],
+        [''],
+        ['═══════════════════════════════════════════════════════'],
+        ['KEY INSIGHTS & RECOMMENDATIONS'],
+        ['═══════════════════════════════════════════════════════'],
+        [''],
+        ['1. Overall Performance', overallStats.onTimeRate >= 80 ? '✅ Excellent' : overallStats.onTimeRate >= 70 ? '⚠️ Good but improvable' : '🚨 Needs urgent improvement'],
+        ['2. PostEx Status', postexStats.onTimeRate >= 80 ? '✅ Performing excellently' : postexStats.onTimeRate >= 70 ? '⚠️ Acceptable performance' : '🚨 Performance issues'],
+        ['3. Leopards Status', leopardsStats.onTimeRate >= 80 ? '✅ Performing excellently' : leopardsStats.onTimeRate >= 70 ? '⚠️ Acceptable performance' : '🚨 Performance issues'],
+        ['4. Recommendation', postexStats.onTimeRate > leopardsStats.onTimeRate 
+          ? `Prioritize PostEx for faster deliveries (${postexStats.onTimeRate}% on-time rate)`
+          : `Prioritize Leopards for faster deliveries (${leopardsStats.onTimeRate}% on-time rate)`],
+        ['5. Action Required', overdueOrders.length > 0 
+          ? `⚠️ ${overdueOrders.length} orders are OVERDUE - immediate follow-up needed`
+          : '✅ No overdue orders - maintain current standards'],
+        [''],
+        ['═══════════════════════════════════════════════════════'],
+        ['TREND ANALYSIS'],
+        ['═══════════════════════════════════════════════════════'],
+        [''],
+        ['Early Delivery Rate', `${Math.round((overallStats.early / overallStats.delivered) * 100)}%`, overallStats.early >= overallStats.late ? '✅ Excellent' : '⚠️ Monitor'],
+        ['Late Delivery Rate', `${Math.round((overallStats.late / overallStats.delivered) * 100)}%`, overallStats.late <= overallStats.early ? '✅ Under control' : '🚨 Concerning'],
+        ['Average Delay Impact', `${overallStats.avgDelay} days`, Number(overallStats.avgDelay) <= 2 ? '✅ Minimal' : '⚠️ Significant'],
       ];
       
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      wsSummary['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }];
-      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+      wsSummary['!cols'] = [{ wch: 35 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
       
-      // ===== SHEET 2: POSTEX ORDERS =====
+      // Apply colors to summary
+      const summaryRange = XLSX.utils.decode_range(wsSummary['!ref'] || 'A1');
+      for (let R = summaryRange.s.r; R <= summaryRange.e.r; ++R) {
+        for (let C = summaryRange.s.c; C <= summaryRange.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!wsSummary[cellAddress]) continue;
+          
+          // Header rows
+          if (R === 0 || R === 5 || R === 18 || R === 26 || R === 37) {
+            wsSummary[cellAddress].s = {
+              font: { bold: true, color: { rgb: "FFFFFF" } },
+              fill: { fgColor: { rgb: "1E40AF" } },
+              alignment: { horizontal: "center", vertical: "center" }
+            };
+          }
+          // Column headers
+          else if (R === 8) {
+            wsSummary[cellAddress].s = {
+              font: { bold: true },
+              fill: { fgColor: { rgb: "DBEAFE" } },
+              alignment: { horizontal: "center" }
+            };
+          }
+        }
+      }
+      
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary & Insights');
+      
+      // ===== SHEET 2: POSTEX ORDERS WITH COLORS =====
       const postexData = [
-        [`PostEx Orders - ${postexOrders.length} Total`],
-        [`On-Time Rate: ${calculateOnTimeRate(postexOrders)}%`],
+        [`PostEx Orders - ${postexStats.total} Total (${postexStats.delivered} Delivered, ${overdueOrders.filter(o => o.courier_name === 'PostEx').length} Overdue)`],
+        [`On-Time Rate: ${postexStats.onTimeRate}% | Early: ${postexStats.early} | On-Time: ${postexStats.onTime} | Late: ${postexStats.late}`],
         [''],
-        ['Order #', 'Customer', 'City', 'Dispatch', 'SLA Date', 'Delivered', 'Performance']
+        ['Order #', 'Customer', 'City', 'Order Date', 'Dispatch Date', 'SLA Date', 'Delivered', 'Performance', 'Status']
       ];
       
       postexOrders.forEach(o => {
@@ -1245,26 +1336,74 @@ const Orders = () => {
           o.order_number || 'N/A',
           o.customer_name || 'N/A',
           o.shipping_address?.city || 'N/A',
-          new Date(o.fulfilled_at).toLocaleDateString('en-GB'),
-          new Date(o.scheduled_delivery_date).toLocaleDateString('en-GB'),
-          new Date(o.delivered_at).toLocaleDateString('en-GB'),
+          o.created_at ? new Date(o.created_at).toLocaleDateString('en-GB') : 'N/A',
+          o.fulfilled_at ? new Date(o.fulfilled_at).toLocaleDateString('en-GB') : 'Not Dispatched',
+          o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-GB') : 'N/A',
+          o.delivered_at ? new Date(o.delivered_at).toLocaleDateString('en-GB') : 'Not Delivered',
           getPerformanceText(o),
+          o.delivered_at ? 'Delivered' : 'OVERDUE'
         ]);
       });
       
       const wsPostex = XLSX.utils.aoa_to_sheet(postexData);
       wsPostex['!cols'] = [
-        { wch: 15 }, { wch: 20 }, { wch: 15 }, 
-        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 }
+        { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, 
+        { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 12 }
       ];
+      
+      // Apply colors to PostEx sheet
+      const postexRange = XLSX.utils.decode_range(wsPostex['!ref'] || 'A1');
+      for (let R = 4; R < postexData.length; ++R) {
+        const perfCell = XLSX.utils.encode_cell({ r: R, c: 7 }); // Performance column
+        const statusCell = XLSX.utils.encode_cell({ r: R, c: 8 }); // Status column
+        
+        if (wsPostex[perfCell]) {
+          const perfText = wsPostex[perfCell].v;
+          if (perfText.includes('Early')) {
+            // Green for early
+            for (let C = 0; C <= 8; ++C) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsPostex[cellAddr]) {
+                wsPostex[cellAddr].s = {
+                  fill: { fgColor: { rgb: "D1FAE5" } },
+                  font: { color: { rgb: "065F46" } }
+                };
+              }
+            }
+          } else if (perfText.includes('On-Time')) {
+            // Light blue for on-time
+            for (let C = 0; C <= 8; ++C) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsPostex[cellAddr]) {
+                wsPostex[cellAddr].s = {
+                  fill: { fgColor: { rgb: "DBEAFE" } },
+                  font: { color: { rgb: "1E40AF" } }
+                };
+              }
+            }
+          } else if (perfText.includes('Late') || perfText.includes('OVERDUE')) {
+            // Red for late/overdue
+            for (let C = 0; C <= 8; ++C) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsPostex[cellAddr]) {
+                wsPostex[cellAddr].s = {
+                  fill: { fgColor: { rgb: "FEE2E2" } },
+                  font: { color: { rgb: "991B1B" }, bold: perfText.includes('OVERDUE') }
+                };
+              }
+            }
+          }
+        }
+      }
+      
       XLSX.utils.book_append_sheet(wb, wsPostex, 'PostEx Orders');
       
-      // ===== SHEET 3: LEOPARDS ORDERS =====
+      // ===== SHEET 3: LEOPARDS ORDERS WITH COLORS =====
       const leopardsData = [
-        [`Leopards Orders - ${leopardsOrders.length} Total`],
-        [`On-Time Rate: ${calculateOnTimeRate(leopardsOrders)}%`],
+        [`Leopards Orders - ${leopardsStats.total} Total (${leopardsStats.delivered} Delivered, ${overdueOrders.filter(o => o.courier_name === 'Leopards').length} Overdue)`],
+        [`On-Time Rate: ${leopardsStats.onTimeRate}% | Early: ${leopardsStats.early} | On-Time: ${leopardsStats.onTime} | Late: ${leopardsStats.late}`],
         [''],
-        ['Order #', 'Customer', 'City', 'Dispatch', 'SLA Date', 'Delivered', 'Performance']
+        ['Order #', 'Customer', 'City', 'Order Date', 'Dispatch Date', 'SLA Date', 'Delivered', 'Performance', 'Status']
       ];
       
       leopardsOrders.forEach(o => {
@@ -1272,21 +1411,65 @@ const Orders = () => {
           o.order_number || 'N/A',
           o.customer_name || 'N/A',
           o.shipping_address?.city || 'N/A',
-          new Date(o.fulfilled_at).toLocaleDateString('en-GB'),
-          new Date(o.scheduled_delivery_date).toLocaleDateString('en-GB'),
-          new Date(o.delivered_at).toLocaleDateString('en-GB'),
+          o.created_at ? new Date(o.created_at).toLocaleDateString('en-GB') : 'N/A',
+          o.fulfilled_at ? new Date(o.fulfilled_at).toLocaleDateString('en-GB') : 'Not Dispatched',
+          o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-GB') : 'N/A',
+          o.delivered_at ? new Date(o.delivered_at).toLocaleDateString('en-GB') : 'Not Delivered',
           getPerformanceText(o),
+          o.delivered_at ? 'Delivered' : 'OVERDUE'
         ]);
       });
       
       const wsLeopards = XLSX.utils.aoa_to_sheet(leopardsData);
       wsLeopards['!cols'] = wsPostex['!cols'];
+      
+      // Apply colors to Leopards sheet (same logic as PostEx)
+      const leopardsRange = XLSX.utils.decode_range(wsLeopards['!ref'] || 'A1');
+      for (let R = 4; R < leopardsData.length; ++R) {
+        const perfCell = XLSX.utils.encode_cell({ r: R, c: 7 });
+        
+        if (wsLeopards[perfCell]) {
+          const perfText = wsLeopards[perfCell].v;
+          if (perfText.includes('Early')) {
+            for (let C = 0; C <= 8; ++C) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsLeopards[cellAddr]) {
+                wsLeopards[cellAddr].s = {
+                  fill: { fgColor: { rgb: "D1FAE5" } },
+                  font: { color: { rgb: "065F46" } }
+                };
+              }
+            }
+          } else if (perfText.includes('On-Time')) {
+            for (let C = 0; C <= 8; ++C) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsLeopards[cellAddr]) {
+                wsLeopards[cellAddr].s = {
+                  fill: { fgColor: { rgb: "DBEAFE" } },
+                  font: { color: { rgb: "1E40AF" } }
+                };
+              }
+            }
+          } else if (perfText.includes('Late') || perfText.includes('OVERDUE')) {
+            for (let C = 0; C <= 8; ++C) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsLeopards[cellAddr]) {
+                wsLeopards[cellAddr].s = {
+                  fill: { fgColor: { rgb: "FEE2E2" } },
+                  font: { color: { rgb: "991B1B" }, bold: perfText.includes('OVERDUE') }
+                };
+              }
+            }
+          }
+        }
+      }
+      
       XLSX.utils.book_append_sheet(wb, wsLeopards, 'Leopards Orders');
       
       // Save
-      XLSX.writeFile(wb, `Courier_Performance_${startDate.toISOString().split('T')[0]}_to_${endDate.toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `Courier_Performance_Professional_${startDate.toISOString().split('T')[0]}_to_${endDate.toISOString().split('T')[0]}.xlsx`);
       
-      toast.success('Excel report generated successfully!');
+      toast.success('✅ Professional Excel report generated!');
     } catch (error) {
       console.error('Excel export error:', error);
       toast.error('Failed to generate Excel report');
@@ -1452,7 +1635,7 @@ const Orders = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -1469,7 +1652,7 @@ const Orders = () => {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{stats.pendingOrders}</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.pendingOrders}</div>
               <p className="text-xs text-muted-foreground">Awaiting fulfillment</p>
             </CardContent>
           </Card>
@@ -1497,7 +1680,7 @@ const Orders = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Last 24 Hours</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.last24HoursTotal}</div>
