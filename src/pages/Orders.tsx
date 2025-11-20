@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, RefreshCcw, Loader2, Truck, AlertCircle, FileDown, FileSpreadsheet, Download } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, TrendingUp, RefreshCw, RefreshCcw, Loader2, Truck, AlertCircle, FileDown, FileSpreadsheet, Download, BarChart3, FileText, Zap, Calendar } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -38,6 +40,8 @@ const Orders = () => {
   });
   const [exportDays, setExportDays] = useState(15);
   const [exporting, setExporting] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -569,6 +573,239 @@ const Orders = () => {
     }
   };
 
+  const exportPerformanceReport = () => {
+    setShowReportDialog(true);
+  };
+
+  const generatePerformanceReport = async (reportFormat: 'pdf' | 'excel' | 'both') => {
+    setGeneratingReport(true);
+    
+    try {
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+      
+      const { data: reportOrders, error } = await supabase
+        .from('shopify_orders')
+        .select('*')
+        .in('courier_name', ['PostEx', 'Leopards'])
+        .eq('fulfillment_status', 'fulfilled')
+        .gte('fulfilled_at', sixtyDaysAgo.toISOString())
+        .not('delivered_at', 'is', null)
+        .order('delivered_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Calculate statistics
+      const postexOrders = reportOrders.filter(o => o.courier_name === 'PostEx');
+      const leopardsOrders = reportOrders.filter(o => o.courier_name === 'Leopards');
+      
+      const getStats = (courierOrders: any[]) => {
+        let early = 0, onTime = 0, late = 0;
+        const delays: number[] = [];
+        
+        courierOrders.forEach(order => {
+          const shippingAddress = order.shipping_address || {};
+          const isKarachi = shippingAddress.city?.toLowerCase().includes('karachi');
+          const slaDays = isKarachi ? 2 : 5;
+          
+          if (order.fulfilled_at && order.delivered_at) {
+            const dispatch = new Date(order.fulfilled_at);
+            const slaDate = new Date(dispatch);
+            slaDate.setDate(slaDate.getDate() + slaDays);
+            
+            const delivered = new Date(order.delivered_at);
+            const deliveredDate = new Date(delivered.getFullYear(), delivered.getMonth(), delivered.getDate());
+            const slaDateOnly = new Date(slaDate.getFullYear(), slaDate.getMonth(), slaDate.getDate());
+            
+            const diffTime = deliveredDate.getTime() - slaDateOnly.getTime();
+            const delayDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            
+            delays.push(delayDays);
+            
+            if (delayDays < 0) early++;
+            else if (delayDays === 0) onTime++;
+            else late++;
+          }
+        });
+        
+        const total = courierOrders.length;
+        const onTimeRate = total > 0 ? Math.round(((early + onTime) / total) * 100) : 0;
+        const avgDelay = delays.length > 0
+          ? (delays.reduce((a, b) => a + b, 0) / delays.length).toFixed(1)
+          : '0.0';
+        
+        return { total, early, onTime, late, onTimeRate, avgDelay };
+      };
+      
+      const stats = {
+        postex: getStats(postexOrders),
+        leopards: getStats(leopardsOrders),
+        dateRange: {
+          start: format(sixtyDaysAgo, 'dd MMM yyyy'),
+          end: format(new Date(), 'dd MMM yyyy')
+        }
+      };
+      
+      if (reportFormat === 'pdf' || reportFormat === 'both') {
+        await generatePDFReport(reportOrders, stats, sixtyDaysAgo);
+      }
+      
+      if (reportFormat === 'excel' || reportFormat === 'both') {
+        await generateExcelReport(reportOrders, stats, sixtyDaysAgo);
+      }
+      
+      toast.success('Report generated successfully!');
+      setShowReportDialog(false);
+    } catch (error) {
+      console.error('Report generation error:', error);
+      toast.error('Failed to generate report');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const generatePDFReport = async (reportOrders: any[], stats: any, startDate: Date) => {
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    
+    // PAGE 1: EXECUTIVE SUMMARY
+    doc.setFillColor(30, 64, 175);
+    doc.rect(0, 0, 297, 30, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('COURIER PERFORMANCE REPORT', 148.5, 12, { align: 'center' } as any);
+    
+    doc.setFontSize(12);
+    doc.text(`Period: ${stats.dateRange.start} to ${stats.dateRange.end} (60 Days)`, 148.5, 20, { align: 'center' } as any);
+    doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`, 148.5, 26, { align: 'center' } as any);
+    
+    doc.setTextColor(0, 0, 0);
+    (doc as any).autoTable({
+      startY: 40,
+      head: [['Metric', 'PostEx', 'Leopards']],
+      body: [
+        ['Total Orders', stats.postex.total, stats.leopards.total],
+        ['On-Time Rate', `${stats.postex.onTimeRate}%`, `${stats.leopards.onTimeRate}%`],
+        ['Early', stats.postex.early, stats.leopards.early],
+        ['On-Time', stats.postex.onTime, stats.leopards.onTime],
+        ['Late', stats.postex.late, stats.leopards.late],
+        ['Avg Delay', `${stats.postex.avgDelay} days`, `${stats.leopards.avgDelay} days`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [30, 64, 175] }
+    });
+    
+    // PAGE 2: POSTEX ORDERS
+    const postexOrders = reportOrders.filter(o => o.courier_name === 'PostEx');
+    if (postexOrders.length > 0) {
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.text('PostEx Orders', 14, 15);
+      
+      const postexData = postexOrders.map(o => {
+        const shippingAddress = o.shipping_address || {};
+        return [
+          o.order_number,
+          o.customer_name?.substring(0, 20) || 'N/A',
+          shippingAddress.city || 'N/A',
+          o.fulfilled_at ? format(new Date(o.fulfilled_at), 'dd/MM/yy') : '',
+          o.delivered_at ? format(new Date(o.delivered_at), 'dd/MM/yy') : '',
+        ];
+      });
+      
+      (doc as any).autoTable({
+        startY: 20,
+        head: [['Order #', 'Customer', 'City', 'Dispatch', 'Delivered']],
+        body: postexData,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [234, 88, 12] }
+      });
+    }
+    
+    // PAGE 3: LEOPARDS ORDERS
+    const leopardsOrders = reportOrders.filter(o => o.courier_name === 'Leopards');
+    if (leopardsOrders.length > 0) {
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.text('Leopards Orders', 14, 15);
+      
+      const leopardsData = leopardsOrders.map(o => {
+        const shippingAddress = o.shipping_address || {};
+        return [
+          o.order_number,
+          o.customer_name?.substring(0, 20) || 'N/A',
+          shippingAddress.city || 'N/A',
+          o.fulfilled_at ? format(new Date(o.fulfilled_at), 'dd/MM/yy') : '',
+          o.delivered_at ? format(new Date(o.delivered_at), 'dd/MM/yy') : '',
+        ];
+      });
+      
+      (doc as any).autoTable({
+        startY: 20,
+        head: [['Order #', 'Customer', 'City', 'Dispatch', 'Delivered']],
+        body: leopardsData,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [220, 38, 38] }
+      });
+    }
+    
+    const fileName = `Courier_Performance_${format(startDate, 'ddMMMyyyy')}_to_${format(new Date(), 'ddMMMyyyy')}.pdf`;
+    doc.save(fileName);
+  };
+
+  const generateExcelReport = async (reportOrders: any[], stats: any, startDate: Date) => {
+    const wb = XLSX.utils.book_new();
+    
+    // Sheet 1: Summary
+    const summaryData = [
+      ['COURIER PERFORMANCE REPORT'],
+      [`Period: ${stats.dateRange.start} to ${stats.dateRange.end}`],
+      [''],
+      ['Metric', 'PostEx', 'Leopards'],
+      ['Total Orders', stats.postex.total, stats.leopards.total],
+      ['On-Time Rate', `${stats.postex.onTimeRate}%`, `${stats.leopards.onTimeRate}%`],
+      ['Early', stats.postex.early, stats.leopards.early],
+      ['On-Time', stats.postex.onTime, stats.leopards.onTime],
+      ['Late', stats.postex.late, stats.leopards.late],
+      ['Average Delay', `${stats.postex.avgDelay} days`, `${stats.leopards.avgDelay} days`],
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+    
+    // Sheet 2: PostEx Orders
+    const postexOrders = reportOrders.filter(o => o.courier_name === 'PostEx').map(o => {
+      const shippingAddress = o.shipping_address || {};
+      return {
+        'Order #': o.order_number,
+        'Customer': o.customer_name,
+        'Phone': o.customer_phone,
+        'City': shippingAddress.city,
+        'Dispatch Date': o.fulfilled_at ? format(new Date(o.fulfilled_at), 'dd/MM/yyyy') : '',
+        'Delivered Date': o.delivered_at ? format(new Date(o.delivered_at), 'dd/MM/yyyy') : '',
+      };
+    });
+    const wsPostex = XLSX.utils.json_to_sheet(postexOrders);
+    XLSX.utils.book_append_sheet(wb, wsPostex, 'PostEx Orders');
+    
+    // Sheet 3: Leopards Orders
+    const leopardsOrders = reportOrders.filter(o => o.courier_name === 'Leopards').map(o => {
+      const shippingAddress = o.shipping_address || {};
+      return {
+        'Order #': o.order_number,
+        'Customer': o.customer_name,
+        'Phone': o.customer_phone,
+        'City': shippingAddress.city,
+        'Dispatch Date': o.fulfilled_at ? format(new Date(o.fulfilled_at), 'dd/MM/yyyy') : '',
+        'Delivered Date': o.delivered_at ? format(new Date(o.delivered_at), 'dd/MM/yyyy') : '',
+      };
+    });
+    const wsLeopards = XLSX.utils.json_to_sheet(leopardsOrders);
+    XLSX.utils.book_append_sheet(wb, wsLeopards, 'Leopards Orders');
+    
+    const fileName = `Courier_Performance_${format(startDate, 'ddMMMyyyy')}_to_${format(new Date(), 'ddMMMyyyy')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
   const filteredOrders = orders.filter(
     (order) =>
       order.order_number?.includes(searchQuery) ||
@@ -994,11 +1231,17 @@ const Orders = () => {
                     slaDate.setDate(slaDate.getDate() + slaDays);
                     slaEta = slaDate.toLocaleDateString('en-GB');
                     
-                    // Calculate delay if delivered
+                    // Calculate delay if delivered (compare dates only, ignore time)
                     if (order.delivered_at) {
                       const delivered = new Date(order.delivered_at);
-                      const diffTime = delivered.getTime() - slaDate.getTime();
-                      delayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      
+                      // Reset both dates to midnight for pure date comparison
+                      const deliveredDate = new Date(delivered.getFullYear(), delivered.getMonth(), delivered.getDate());
+                      const slaDateOnly = new Date(slaDate.getFullYear(), slaDate.getMonth(), slaDate.getDate());
+                      
+                      // Calculate difference in days
+                      const diffTime = deliveredDate.getTime() - slaDateOnly.getTime();
+                      delayDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
                       
                       if (delayDays < 0) {
                         delayDisplay = `${Math.abs(delayDays)}d Early`;
