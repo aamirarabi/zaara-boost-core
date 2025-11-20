@@ -179,12 +179,18 @@ Deno.serve(async (req) => {
                   const order = batch.find(o => o.tracking_number === trackingNumber);
                   if (!order) continue;
 
+                  // ===== CRITICAL FIX: CHECK IF trackingResponse EXISTS =====
+                  if (!trackingResponse) {
+                    console.log(`⚠️ ${order.order_number}: No trackingResponse from PostEx API - skipping`);
+                    continue; // Skip gracefully, don't crash!
+                  }
+
                   const updateData: any = {
                     courier_last_updated: new Date().toISOString(),
                   };
 
-                  // Extract delivery date if available
-                  if (trackingResponse.orderDeliveryDate) {
+                  // Extract delivery date if available - SAFE ACCESS
+                  if (trackingResponse && trackingResponse.orderDeliveryDate) {
                     try {
                       updateData.delivered_at = new Date(trackingResponse.orderDeliveryDate).toISOString();
                       console.log(`📅 ${order.order_number}: ${trackingResponse.orderDeliveryDate}`);
@@ -193,8 +199,8 @@ Deno.serve(async (req) => {
                     }
                   }
 
-                  // Extract status
-                  if (trackingResponse.transactionStatus) {
+                  // Extract status - SAFE ACCESS
+                  if (trackingResponse && trackingResponse.transactionStatus) {
                     const statusCode = trackingResponse.transactionStatus;
                     updateData.courier_api_status = POSTEX_STATUS_MAP[statusCode] || statusCode;
                     
