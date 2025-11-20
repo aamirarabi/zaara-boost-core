@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
         try {
           // Build GET request URL with comma-separated tracking numbers
           const trackingParams = trackingNumbers.join(',');
-          const postexUrl = `https://api.postex.pk/services/integration/api/order/v1/track-bulk-order?trackingNumber=${encodeURIComponent(trackingParams)}`;
+          const postexUrl = `https://api.postex.pk/services/integration/api/order/v1/track-bulk-order?TrackingNumbers=${encodeURIComponent(trackingParams)}`;
           
           console.log(`Calling PostEx API (GET) for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(postexOrders.length / batchSize)}...`);
           
