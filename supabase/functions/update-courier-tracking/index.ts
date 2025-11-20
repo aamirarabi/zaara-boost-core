@@ -153,8 +153,23 @@ Deno.serve(async (req) => {
             const postexData = await postexResponse.json();
             console.log('✅ PostEx API success!');
             
+            // LOG THE FULL RESPONSE STRUCTURE
+            console.log('PostEx Full Response:', JSON.stringify(postexData, null, 2));
+            console.log('PostEx statusCode:', postexData.statusCode);
+            console.log('PostEx dist array length:', postexData.dist?.length);
+            
             if (postexData.statusCode === '200' && postexData.dist) {
               console.log(`Processing ${postexData.dist.length} PostEx results...`);
+              
+              // LOG FIRST RESULT DETAILS
+              if (postexData.dist.length > 0) {
+                const firstResult = postexData.dist[0];
+                console.log('First PostEx Result Structure:');
+                console.log('- trackingNumber:', firstResult.trackingNumber);
+                console.log('- message:', firstResult.message);
+                console.log('- trackingResponse keys:', Object.keys(firstResult.trackingResponse || {}));
+                console.log('- Full trackingResponse:', JSON.stringify(firstResult.trackingResponse, null, 2));
+              }
               
               for (const trackingResult of postexData.dist) {
                 try {
