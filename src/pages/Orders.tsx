@@ -38,7 +38,7 @@ const Orders = () => {
     last24HoursFulfilled: 0,
     last24HoursPending: 0,
   });
-  const [exportDays, setExportDays] = useState(15);
+  const [exportDays, setExportDays] = useState(30);
   const [exporting, setExporting] = useState(false);
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -1346,7 +1346,7 @@ const Orders = () => {
           <div className="flex gap-2 items-center">
             <Select value={exportDays.toString()} onValueChange={(v) => setExportDays(parseInt(v))}>
               <SelectTrigger className="w-[150px]">
-                <SelectValue />
+                <SelectValue placeholder="Last 30 Days" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="7">Last 7 Days</SelectItem>
@@ -1509,279 +1509,137 @@ const Orders = () => {
           </Card>
         </div>
 
-        {/* Two-Column Layout: 60-Day Stats + Order Sources */}
-        <div className="mb-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
-          
-          {/* LEFT: 60-Day Delivery Status (60% width = 3 columns) */}
-          <div className="lg:col-span-3">
-            <Card className="border-2 border-blue-500 shadow-xl bg-gradient-to-br from-blue-50 to-purple-50 h-full">
-              <CardHeader className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 text-white py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-                      <Package className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-bold">
-                        Last 60 Days Delivery Status
-                      </CardTitle>
-                      <p className="text-xs text-blue-100 mt-1">
-                        📅 {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} → {new Date().toLocaleDateString('en-GB')}
-                      </p>
-                    </div>
+        {/* 60-Day Delivery Status - Full Width */}
+        <div className="mb-6">
+          <Card className="border-2 border-blue-500 shadow-xl bg-gradient-to-br from-blue-50 to-purple-50">
+            <CardHeader className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 text-white py-3 px-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                    <Package className="h-6 w-6" />
                   </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                    <div className="text-xs text-blue-100">TOTAL</div>
-                    <div className="text-2xl font-bold">{stats60Days.total}</div>
+                  <div>
+                    <CardTitle className="text-lg font-bold">
+                      Last 60 Days Delivery Status
+                    </CardTitle>
+                    <p className="text-xs text-blue-100 mt-1">
+                      📅 {new Date(new Date().setDate(new Date().getDate() - 60)).toLocaleDateString('en-GB')} → {new Date().toLocaleDateString('en-GB')}
+                    </p>
                   </div>
                 </div>
-              </CardHeader>
-              
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Delivered */}
-                  <div className="group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-green-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
-                    <div className="relative text-center p-3 border-2 border-green-300 rounded-xl hover:border-green-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
-                      <div className="text-3xl mb-2">📦</div>
-                      <div className="text-2xl font-bold text-green-700 mb-1">
-                        {stats60Days.delivered}
-                      </div>
-                      <div className="text-xs font-semibold text-green-900 mb-1">
-                        DELIVERED
-                      </div>
-                      <Badge className="bg-green-600 text-white text-xs px-2 py-0.5 font-bold">
-                        {stats60Days.deliveryRate}%
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {/* In Transit */}
-                  <div className="group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-blue-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
-                    <div className="relative text-center p-3 border-2 border-blue-300 rounded-xl hover:border-blue-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
-                      <div className="text-3xl mb-2">🚚</div>
-                      <div className="text-2xl font-bold text-blue-700 mb-1">
-                        {stats60Days.inTransit}
-                      </div>
-                      <div className="text-xs font-semibold text-blue-900 mb-1">
-                        IN TRANSIT
-                      </div>
-                      <Badge variant="outline" className="border-2 border-blue-600 text-blue-700 text-xs px-2 py-0.5 font-bold">
-                        {Math.round((stats60Days.inTransit / stats60Days.total) * 100)}%
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {/* Returned */}
-                  <div className="group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-red-100 to-red-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
-                    <div className="relative text-center p-3 border-2 border-red-300 rounded-xl hover:border-red-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
-                      <div className="text-3xl mb-2">🔄</div>
-                      <div className="text-2xl font-bold text-red-700 mb-1">
-                        {stats60Days.returned}
-                      </div>
-                      <div className="text-xs font-semibold text-red-900 mb-1">
-                        RETURNED
-                      </div>
-                      <Badge variant="destructive" className="text-xs px-2 py-0.5 font-bold">
-                        {stats60Days.returnRate}%
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {/* Pending */}
-                  <div className="group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
-                    <div className="relative text-center p-3 border-2 border-orange-300 rounded-xl hover:border-orange-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
-                      <div className="text-3xl mb-2">⏳</div>
-                      <div className="text-2xl font-bold text-orange-700 mb-1">
-                        {stats60Days.pending}
-                      </div>
-                      <div className="text-xs font-semibold text-orange-900 mb-1">
-                        PENDING
-                      </div>
-                      <Badge className="bg-orange-500 text-white text-xs px-2 py-0.5 font-bold">
-                        {Math.round((stats60Days.pending / stats60Days.total) * 100)}%
-                      </Badge>
-                    </div>
-                  </div>
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+                  <div className="text-xs text-blue-100">TOTAL</div>
+                  <div className="text-2xl font-bold">{stats60Days.total}</div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* RIGHT: Order Sources Last 30 Days (40% width = 2 columns) */}
-          <div className="lg:col-span-2">
-            <Card className="border-2 border-purple-500 shadow-xl bg-gradient-to-br from-purple-50 to-pink-50 h-full">
-              <CardHeader className="bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 text-white py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-                      <BarChart3 className="h-6 w-6" />
+              </div>
+            </CardHeader>
+            
+            <CardContent className="p-4">
+              <div className="grid grid-cols-4 gap-4">
+                {/* Delivered */}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-green-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-green-300 rounded-xl hover:border-green-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2 animate-bounce">📦</div>
+                    <div className="text-3xl font-bold text-green-700 mb-1">
+                      {stats60Days.delivered}
                     </div>
-                    <div>
-                      <CardTitle className="text-lg font-bold">
-                        Order Sources
-                      </CardTitle>
-                      <p className="text-xs text-purple-100 mt-1">
-                        📅 Last 30 Days
-                      </p>
+                    <div className="text-xs font-semibold text-green-900 mb-2">
+                      DELIVERED
                     </div>
-                  </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                    <div className="text-xs text-purple-100">TOTAL</div>
-                    <div className="text-2xl font-bold">{orderSources.total}</div>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="p-4">
-                {/* Donut Chart Visual */}
-                <div className="relative w-full aspect-square max-w-[200px] mx-auto mb-4">
-                  {/* Donut segments */}
-                  <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="20"/>
-                    {/* Facebook - Blue */}
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      fill="none" 
-                      stroke="#1877f2" 
-                      strokeWidth="20"
-                      strokeDasharray={`${orderSources.facebookPercent * 2.51} 251`}
-                      strokeDashoffset="0"
-                      className="transition-all duration-500"
-                    />
-                    {/* Instagram - Pink */}
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      fill="none" 
-                      stroke="#e4405f" 
-                      strokeWidth="20"
-                      strokeDasharray={`${orderSources.instagramPercent * 2.51} 251`}
-                      strokeDashoffset={`-${orderSources.facebookPercent * 2.51}`}
-                      className="transition-all duration-500"
-                    />
-                    {/* TikTok - Black */}
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      fill="none" 
-                      stroke="#000000" 
-                      strokeWidth="20"
-                      strokeDasharray={`${orderSources.tiktokPercent * 2.51} 251`}
-                      strokeDashoffset={`-${(orderSources.facebookPercent + orderSources.instagramPercent) * 2.51}`}
-                      className="transition-all duration-500"
-                    />
-                    {/* Google Ads - Red */}
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      fill="none" 
-                      stroke="#ea4335" 
-                      strokeWidth="20"
-                      strokeDasharray={`${orderSources.googleAdsPercent * 2.51} 251`}
-                      strokeDashoffset={`-${(orderSources.facebookPercent + orderSources.instagramPercent + orderSources.tiktokPercent) * 2.51}`}
-                      className="transition-all duration-500"
-                    />
-                    {/* YouTube - Red */}
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      fill="none" 
-                      stroke="#ff0000" 
-                      strokeWidth="20"
-                      strokeDasharray={`${orderSources.youtubePercent * 2.51} 251`}
-                      strokeDashoffset={`-${(orderSources.facebookPercent + orderSources.instagramPercent + orderSources.tiktokPercent + orderSources.googleAdsPercent) * 2.51}`}
-                      className="transition-all duration-500"
-                    />
-                    {/* Organic - Gray */}
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      fill="none" 
-                      stroke="#6b7280" 
-                      strokeWidth="20"
-                      strokeDasharray={`${orderSources.organicPercent * 2.51} 251`}
-                      strokeDashoffset={`-${(orderSources.facebookPercent + orderSources.instagramPercent + orderSources.tiktokPercent + orderSources.googleAdsPercent + orderSources.youtubePercent) * 2.51}`}
-                      className="transition-all duration-500"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-800">{orderSources.total}</div>
-                      <div className="text-xs text-gray-500">Orders</div>
+                    <Badge className="bg-green-600 text-white text-sm px-3 py-1 font-bold shadow-md">
+                      {stats60Days.deliveryRate}%
+                    </Badge>
+                    <div className="text-xs text-green-700 font-medium mt-2">
+                      {stats60Days.deliveryRate >= 80 ? '🌟 Excellent!' : stats60Days.deliveryRate >= 70 ? '✅ Good' : '⚠️ Improve'}
                     </div>
                   </div>
                 </div>
                 
-                {/* Source Breakdown */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#1877f2]"></div>
-                      <span className="font-medium">Facebook</span>
+                {/* In Transit */}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-blue-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-blue-300 rounded-xl hover:border-blue-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2 animate-pulse">🚚</div>
+                    <div className="text-3xl font-bold text-blue-700 mb-1">
+                      {stats60Days.inTransit}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{orderSources.facebook}</span>
-                      <Badge className="bg-blue-100 text-blue-800 text-[10px]">{orderSources.facebookPercent}%</Badge>
+                    <div className="text-xs font-semibold text-blue-900 mb-2">
+                      IN TRANSIT
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#e4405f]"></div>
-                      <span className="font-medium">Instagram</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{orderSources.instagram}</span>
-                      <Badge className="bg-pink-100 text-pink-800 text-[10px]">{orderSources.instagramPercent}%</Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-black"></div>
-                      <span className="font-medium">TikTok</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{orderSources.tiktok}</span>
-                      <Badge className="bg-gray-100 text-gray-800 text-[10px]">{orderSources.tiktokPercent}%</Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#ea4335]"></div>
-                      <span className="font-medium">Google Ads</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{orderSources.googleAds}</span>
-                      <Badge className="bg-red-100 text-red-800 text-[10px]">{orderSources.googleAdsPercent}%</Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#ff0000]"></div>
-                      <span className="font-medium">YouTube</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{orderSources.youtube}</span>
-                      <Badge className="bg-red-100 text-red-800 text-[10px]">{orderSources.youtubePercent}%</Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                      <span className="font-medium">Organic</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{orderSources.organic}</span>
-                      <Badge className="bg-gray-100 text-gray-800 text-[10px]">{orderSources.organicPercent}%</Badge>
+                    <Badge variant="outline" className="border-2 border-blue-600 text-blue-700 text-sm px-3 py-1 font-bold">
+                      {Math.round((stats60Days.inTransit / stats60Days.total) * 100)}%
+                    </Badge>
+                    <div className="text-xs text-blue-700 font-medium mt-2">
+                      🚀 On the way
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+                
+                {/* Returned */}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-100 to-red-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-red-300 rounded-xl hover:border-red-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2">🔄</div>
+                    <div className="text-3xl font-bold text-red-700 mb-1">
+                      {stats60Days.returned}
+                    </div>
+                    <div className="text-xs font-semibold text-red-900 mb-2">
+                      RETURNED
+                    </div>
+                    <Badge variant="destructive" className="text-sm px-3 py-1 font-bold shadow-md">
+                      {stats60Days.returnRate}%
+                    </Badge>
+                    <div className="text-xs text-red-700 font-medium mt-2">
+                      {stats60Days.returnRate <= 3 ? '✅ Low' : stats60Days.returnRate <= 5 ? '⚠️ Normal' : '🚨 High'}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Pending */}
+                <div className="group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-50 opacity-50 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+                  <div className="relative text-center p-4 border-2 border-orange-300 rounded-xl hover:border-orange-500 transition-all hover:shadow-lg hover:scale-105 transform duration-200">
+                    <div className="text-4xl mb-2">⏳</div>
+                    <div className="text-3xl font-bold text-orange-700 mb-1">
+                      {stats60Days.pending}
+                    </div>
+                    <div className="text-xs font-semibold text-orange-900 mb-2">
+                      PENDING
+                    </div>
+                    <Badge className="bg-orange-500 text-white text-sm px-3 py-1 font-bold shadow-md">
+                      {Math.round((stats60Days.pending / stats60Days.total) * 100)}%
+                    </Badge>
+                    <div className="text-xs text-orange-700 font-medium mt-2">
+                      📋 To Ship
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Quick Stats Bar */}
+              <div className="mt-4 pt-4 border-t-2 border-blue-200">
+                <div className="flex justify-around text-center">
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Success Rate</div>
+                    <div className="text-lg font-bold text-green-600">{stats60Days.deliveryRate}%</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Active</div>
+                    <div className="text-lg font-bold text-blue-600">{stats60Days.inTransit}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Return Rate</div>
+                    <div className="text-lg font-bold text-red-600">{stats60Days.returnRate}%</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">To Process</div>
+                    <div className="text-lg font-bold text-orange-600">{stats60Days.pending}</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Courier Performance Cards */}
