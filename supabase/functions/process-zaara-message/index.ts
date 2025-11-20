@@ -720,7 +720,31 @@ serve(async (req) => {
   }
 
   try {
+    // Verify JWT authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { phone_number, message } = await req.json();
+
+    // Input validation
+    if (!phone_number || typeof phone_number !== 'string' || phone_number.length > 20) {
+      return new Response(JSON.stringify({ error: 'Invalid phone number' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!message || typeof message !== 'string' || message.length > 4096) {
+      return new Response(JSON.stringify({ error: 'Invalid message' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",

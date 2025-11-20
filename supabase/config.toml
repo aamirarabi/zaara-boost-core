@@ -1,37 +1,4 @@
 project_id = "szralwiwcilltwmxxczq"
 
-[functions.test-leopards-tracking]
-verify_jwt = false
-
 [functions.whatsapp-webhook]
-verify_jwt = false
-
-[functions.sync-shopify-orders]
-verify_jwt = false
-
-[functions.sync-shopify-products]
-verify_jwt = false
-
-[functions.sync-shopify-customers]
-verify_jwt = false
-
-[functions.process-zaara-message]
-verify_jwt = false
-
-[functions.send-whatsapp-message]
-verify_jwt = false
-
-[functions.test-zaara]
-verify_jwt = false
-
-[functions.update-openai-assistant]
-verify_jwt = false
-
-[functions.sync-judgeme-reviews]
-verify_jwt = false
-
-[functions.update-zaara-assistant]
-verify_jwt = false
-
-[functions.sync-faq-to-vector-store]
 verify_jwt = false
