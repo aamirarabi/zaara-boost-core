@@ -220,31 +220,49 @@ const Inbox = () => {
 
   const handleClearAllChats = async () => {
     try {
-      // Delete all from chat_history
+      // Delete all chat messages
       const { error: chatError } = await supabase
         .from("chat_history")
         .delete()
         .neq("phone_number", "");
 
-      // Delete all from conversation_context
+      // Delete all conversation contexts
       const { error: contextError } = await supabase
         .from("conversation_context")
         .delete()
         .neq("phone_number", "");
 
-      // Delete all from conversation_analytics
+      // Delete all conversation analytics
       const { error: analyticsError } = await supabase
         .from("conversation_analytics")
         .delete()
         .neq("phone_number", "");
 
-      if (chatError || contextError || analyticsError) {
+      // Delete all customer tags
+      const { error: tagsError } = await supabase
+        .from("customer_tags")
+        .delete()
+        .neq("phone_number", "");
+
+      // Delete all customer notes
+      const { error: notesError } = await supabase
+        .from("customer_notes")
+        .delete()
+        .neq("phone_number", "");
+
+      if (chatError || contextError || analyticsError || tagsError || notesError) {
         toast.error("Failed to clear all chats");
       } else {
         toast.success("All chats cleared successfully");
+        
+        // Clear all local state
         setSelectedPhone(null);
         setMessages([]);
         setConversations([]);
+        setStarredChats([]);
+        
+        // Force reload conversations to ensure clean state
+        await loadConversations();
       }
     } catch (error) {
       toast.error("Error clearing all chats");
