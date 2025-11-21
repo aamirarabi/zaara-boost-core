@@ -2026,7 +2026,7 @@ User query: ${message}`
           responseText = responseText
             .replace(/\[\d+:\d+\*[^\]]+\]/g, '')  // Remove [XX:X*source]
             .replace(/【\d+:\d+†[^】]+】/g, '')   // Remove 【XX:X†source】
-            .replace(/\s+/g, ' ')  // Clean extra spaces
+            .replace(/ {2,}/g, ' ')  // Clean extra spaces only (preserve newlines)
             .trim();
           
           console.log("📝 Assistant response (after citation removal):", responseText);
