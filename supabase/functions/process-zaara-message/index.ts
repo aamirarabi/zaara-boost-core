@@ -1559,6 +1559,18 @@ User query: ${message}`
               const images = JSON.parse(product.images || "[]");
               const firstImage = images.length > 0 ? images[0] : null;
               
+              // ISSUE #4 FIX: Always send product image BEFORE returning details
+              if (firstImage) {
+                console.log(`📸 Sending product image before returning details: ${firstImage}`);
+                try {
+                  await sendWhatsAppImage(supabase, phone_number, firstImage, product.title);
+                  console.log(`✅ Product image sent successfully`);
+                } catch (imageError) {
+                  console.error(`❌ Failed to send product image:`, imageError);
+                  // Continue anyway - don't block product details
+                }
+              }
+              
               // Get variants for colors
               const variants = JSON.parse(product.variants || "[]");
               const colors = [...new Set(variants.filter((v: any) => v.option1).map((v: any) => v.option1))];
@@ -1964,8 +1976,19 @@ User query: ${message}`
         const textContent = lastMessage.content.find((c: any) => c.type === "text");
         
         if (textContent) {
-          const responseText = textContent.text.value;
-          console.log("📝 Assistant response:", responseText);
+          let responseText = textContent.text.value;
+          
+          // ==========================================
+          // ISSUE #2 FIX: Remove ALL source citations from file_search tool
+          // ==========================================
+          console.log("🧹 Removing source citations from response...");
+          responseText = responseText
+            .replace(/\[\d+:\d+\*[^\]]+\]/g, '')  // Remove [XX:X*source]
+            .replace(/【\d+:\d+†[^】]+】/g, '')   // Remove 【XX:X†source】
+            .replace(/\s+/g, ' ')  // Clean extra spaces
+            .trim();
+          
+          console.log("📝 Assistant response (after citation removal):", responseText);
 
           // ==========================================
           // BUG FIX #1: Replace [Name] placeholder
