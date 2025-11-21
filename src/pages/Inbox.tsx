@@ -253,20 +253,27 @@ const Inbox = () => {
       if (chatError || contextError || analyticsError || tagsError || notesError) {
         toast.error("Failed to clear all chats");
       } else {
-        toast.success("All chats cleared successfully");
-        
-        // Clear all local state
+        // Clear all local state immediately
         setSelectedPhone(null);
         setMessages([]);
         setConversations([]);
         setStarredChats([]);
+        setSearchTerm("");
+        setNewMessage("");
         
-        // Force reload conversations to ensure clean state
-        await loadConversations();
+        // Close dialog
+        setDeleteAllDialogOpen(false);
+        
+        // Show success message
+        toast.success("All chats cleared successfully. Refreshing...");
+        
+        // Force complete page refresh to clear all cache, subscriptions, and buffers
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
       }
     } catch (error) {
       toast.error("Error clearing all chats");
-    } finally {
       setDeleteAllDialogOpen(false);
     }
   };
