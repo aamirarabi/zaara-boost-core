@@ -786,6 +786,45 @@ serve(async (req) => {
     // ==========================================
     // SPEED OPTIMIZATION: Greeting Fast Path
     // ==========================================
+
+    // Helper function to detect gender from Pakistani names
+    function detectGenderFromName(name: string): 'Sir' | 'Madam' | 'Sir/Madam' {
+      if (!name) return 'Sir/Madam';
+      
+      const firstName = name.toLowerCase().trim().split(' ')[0];
+      
+      // Common Pakistani male names
+      const maleNames = [
+        'aamir', 'ahmed', 'ali', 'arslan', 'asad', 'athar', 'azhar',
+        'bilal', 'danish', 'faisal', 'fahad', 'farhan', 'hamza', 'haris',
+        'hassan', 'husain', 'hussain', 'imran', 'kamran', 'khalid',
+        'mohammad', 'muhammad', 'muhamad', 'muneeb', 'noman', 'omer',
+        'omar', 'osama', 'qasim', 'rehan', 'saad', 'sami', 'shahid',
+        'shahrukh', 'shoaib', 'subhan', 'talha', 'tariq', 'umar', 'usman',
+        'waqar', 'waseem', 'yasir', 'zahid', 'zain', 'zeshan'
+      ];
+      
+      // Common Pakistani female names
+      const femaleNames = [
+        'aisha', 'ayesha', 'aliya', 'amina', 'asma', 'bushra',
+        'farah', 'fatima', 'hina', 'khadija', 'laiba', 'maira',
+        'maria', 'maryam', 'mehwish', 'nadia', 'nimra', 'rabia',
+        'rubab', 'saba', 'sadia', 'saira', 'sana', 'sara', 'sarah',
+        'sidra', 'sumera', 'syeda', 'uzma', 'zainab', 'zara'
+      ];
+      
+      if (maleNames.includes(firstName)) {
+        return 'Sir';
+      }
+      
+      if (femaleNames.includes(firstName)) {
+        return 'Madam';
+      }
+      
+      // Default to Sir/Madam if name not recognized
+      return 'Sir/Madam';
+    }
+
     const greetingPattern = /^(salam|assalam|hi|hello|hey|good morning|good evening)$/i;
     if (greetingPattern.test(message.trim())) {
       console.log("⚡ Fast path: Greeting detected");
@@ -798,7 +837,9 @@ serve(async (req) => {
       
       let response;
       if (customer?.customer_name) {
-        response = `Welcome back, ${customer.customer_name} Sir/Madam! How can I assist you today? 🌸`;
+        const gender = detectGenderFromName(customer.customer_name);
+        response = `Welcome back, ${customer.customer_name} ${gender}! How can I assist you today? 🌸`;
+        console.log(`✅ Gender detected: ${gender} for ${customer.customer_name}`);
       } else {
         if (message.toLowerCase().includes('salam')) {
           response = "Wa Alaikum Salam! 🌸 My name is Zaara, I'm your BOOST support AI assistant (AI can make mistakes 😊). May I know your good name please?";
