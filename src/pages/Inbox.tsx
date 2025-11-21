@@ -188,27 +188,46 @@ const Inbox = () => {
     if (!phoneToDelete) return;
 
     try {
-      // Delete from chat_history
+      // Delete from all related tables
       const { error: chatError } = await supabase
         .from("chat_history")
         .delete()
         .eq("phone_number", phoneToDelete);
 
-      // Delete from conversation_context
       const { error: contextError } = await supabase
         .from("conversation_context")
         .delete()
         .eq("phone_number", phoneToDelete);
 
-      if (chatError || contextError) {
+      const { error: analyticsError } = await supabase
+        .from("conversation_analytics")
+        .delete()
+        .eq("phone_number", phoneToDelete);
+
+      const { error: tagsError } = await supabase
+        .from("customer_tags")
+        .delete()
+        .eq("phone_number", phoneToDelete);
+
+      const { error: notesError } = await supabase
+        .from("customer_notes")
+        .delete()
+        .eq("phone_number", phoneToDelete);
+
+      if (chatError || contextError || analyticsError || tagsError || notesError) {
         toast.error("Failed to delete chat");
       } else {
-        toast.success("Chat deleted successfully");
+        // Clear local state immediately
         if (selectedPhone === phoneToDelete) {
           setSelectedPhone(null);
           setMessages([]);
         }
-        loadConversations();
+        
+        // Remove from conversations list
+        setConversations(prev => prev.filter(conv => conv.phone_number !== phoneToDelete));
+        setStarredChats(prev => prev.filter(phone => phone !== phoneToDelete));
+        
+        toast.success("Chat deleted completely");
       }
     } catch (error) {
       toast.error("Error deleting chat");
