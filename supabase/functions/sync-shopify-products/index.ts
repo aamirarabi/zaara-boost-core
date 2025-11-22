@@ -10,6 +10,42 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Helper: Clean duplicate metafields (remove custom.* prefix duplicates)
+  function cleanMetafields(rawMetafields: any): any {
+    if (!rawMetafields || typeof rawMetafields !== 'object') {
+      return rawMetafields;
+    }
+    
+    const cleaned: any = {};
+    const customKeys = new Set<string>();
+    
+    // First pass: identify all custom.* keys
+    for (const key of Object.keys(rawMetafields)) {
+      if (key.startsWith('custom.')) {
+        customKeys.add(key.replace('custom.', ''));
+      }
+    }
+    
+    // Second pass: keep only base keys (skip custom.* if base exists)
+    for (const [key, value] of Object.entries(rawMetafields)) {
+      if (key.startsWith('custom.')) {
+        const baseKey = key.replace('custom.', '');
+        // Skip if base key exists (it's a duplicate)
+        if (baseKey in rawMetafields) {
+          console.log(`🧹 Skipping duplicate: ${key} (keeping ${baseKey})`);
+          continue;
+        }
+        // If no base key, keep this one but rename it
+        cleaned[baseKey] = value;
+        console.log(`✅ Renamed: ${key} → ${baseKey}`);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+    
+    return cleaned;
+  }
+
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -162,7 +198,7 @@ Deno.serve(async (req) => {
         variants: JSON.stringify(p.variants || []),
         price: parseFloat(p.variants[0]?.price || '0'),
         inventory: p.variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0),
-        metafields: metafieldsObj,
+        metafields: cleanMetafields(metafieldsObj),
         all_images: allImages,
         review_rating: reviewRating,
         review_count: reviewCount,

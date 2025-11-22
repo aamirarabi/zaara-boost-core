@@ -641,6 +641,80 @@ export type Database = {
         }
         Relationships: []
       }
+      product_analytics: {
+        Row: {
+          average_order_value: number | null
+          cart_conversion_rate: number | null
+          conversion_rate: number | null
+          created_at: string | null
+          current_stock: number | null
+          days_of_inventory: number | null
+          id: string
+          last_synced_at: string | null
+          low_stock_alert: boolean | null
+          product_id: string
+          sales_velocity: number | null
+          total_add_to_cart: number | null
+          total_purchases: number | null
+          total_revenue: number | null
+          total_views: number | null
+          trending_score: number | null
+          updated_at: string | null
+          views_last_30_days: number | null
+          views_last_7_days: number | null
+        }
+        Insert: {
+          average_order_value?: number | null
+          cart_conversion_rate?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          current_stock?: number | null
+          days_of_inventory?: number | null
+          id?: string
+          last_synced_at?: string | null
+          low_stock_alert?: boolean | null
+          product_id: string
+          sales_velocity?: number | null
+          total_add_to_cart?: number | null
+          total_purchases?: number | null
+          total_revenue?: number | null
+          total_views?: number | null
+          trending_score?: number | null
+          updated_at?: string | null
+          views_last_30_days?: number | null
+          views_last_7_days?: number | null
+        }
+        Update: {
+          average_order_value?: number | null
+          cart_conversion_rate?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          current_stock?: number | null
+          days_of_inventory?: number | null
+          id?: string
+          last_synced_at?: string | null
+          low_stock_alert?: boolean | null
+          product_id?: string
+          sales_velocity?: number | null
+          total_add_to_cart?: number | null
+          total_purchases?: number | null
+          total_revenue?: number | null
+          total_views?: number | null
+          trending_score?: number | null
+          updated_at?: string | null
+          views_last_30_days?: number | null
+          views_last_7_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_analytics_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "shopify_products"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
       product_reviews: {
         Row: {
           body: string | null
@@ -940,6 +1014,7 @@ export type Database = {
           handle: string | null
           images: Json | null
           inventory: number | null
+          last_analytics_sync: string | null
           metafields: Json | null
           options: Json | null
           price: number | null
@@ -953,6 +1028,8 @@ export type Database = {
           synced_at: string | null
           tags: string[] | null
           title: string | null
+          total_sales: number | null
+          total_views: number | null
           updated_at: string | null
           variants: Json | null
           vendor: string | null
@@ -965,6 +1042,7 @@ export type Database = {
           handle?: string | null
           images?: Json | null
           inventory?: number | null
+          last_analytics_sync?: string | null
           metafields?: Json | null
           options?: Json | null
           price?: number | null
@@ -978,6 +1056,8 @@ export type Database = {
           synced_at?: string | null
           tags?: string[] | null
           title?: string | null
+          total_sales?: number | null
+          total_views?: number | null
           updated_at?: string | null
           variants?: Json | null
           vendor?: string | null
@@ -990,6 +1070,7 @@ export type Database = {
           handle?: string | null
           images?: Json | null
           inventory?: number | null
+          last_analytics_sync?: string | null
           metafields?: Json | null
           options?: Json | null
           price?: number | null
@@ -1003,6 +1084,8 @@ export type Database = {
           synced_at?: string | null
           tags?: string[] | null
           title?: string | null
+          total_sales?: number | null
+          total_views?: number | null
           updated_at?: string | null
           variants?: Json | null
           vendor?: string | null
