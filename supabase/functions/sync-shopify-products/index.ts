@@ -184,6 +184,35 @@ Deno.serve(async (req) => {
       // Get all images
       const allImages = p.images?.map((img: any) => img.src) || [];
       
+      // Extract video URLs from metafields
+      let demoVideoUrl = null;
+      let reviewVideoUrl = null;
+      let additionalVideos = [];
+
+      if (p.all_metafields && p.all_metafields.length > 0) {
+        const demoMeta = p.all_metafields.find((m: any) => m.key === 'product_demo_video');
+        const reviewMeta = p.all_metafields.find((m: any) => m.key === 'product_review_video');
+        const dvcMeta = p.all_metafields.find((m: any) => m.key === 'product_dvc');
+        
+        if (demoMeta?.value) {
+          demoVideoUrl = demoMeta.value;
+        }
+        
+        if (reviewMeta?.value) {
+          reviewVideoUrl = reviewMeta.value;
+        }
+        
+        if (dvcMeta?.value) {
+          try {
+            // product_dvc is stored as JSON array string
+            const parsed = JSON.parse(dvcMeta.value);
+            additionalVideos = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            console.log(`Failed to parse product_dvc for ${p.title}`);
+          }
+        }
+      }
+      
       return {
         product_id: p.id.toString(),
         shopify_id: p.id.toString(),
@@ -202,6 +231,9 @@ Deno.serve(async (req) => {
         all_images: allImages,
         review_rating: reviewRating,
         review_count: reviewCount,
+        demo_video_url: demoVideoUrl,
+        review_video_url: reviewVideoUrl,
+        additional_videos: additionalVideos.length > 0 ? additionalVideos : null,
         synced_at: new Date().toISOString(),
       };
     });

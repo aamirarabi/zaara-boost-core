@@ -1007,9 +1007,11 @@ export type Database = {
       }
       shopify_products: {
         Row: {
+          additional_videos: Json | null
           all_images: Json | null
           compare_at_price: number | null
           created_at: string | null
+          demo_video_url: string | null
           description: string | null
           handle: string | null
           images: Json | null
@@ -1023,6 +1025,7 @@ export type Database = {
           published_at: string | null
           review_count: number | null
           review_rating: number | null
+          review_video_url: string | null
           shopify_id: string | null
           status: string | null
           synced_at: string | null
@@ -1035,9 +1038,11 @@ export type Database = {
           vendor: string | null
         }
         Insert: {
+          additional_videos?: Json | null
           all_images?: Json | null
           compare_at_price?: number | null
           created_at?: string | null
+          demo_video_url?: string | null
           description?: string | null
           handle?: string | null
           images?: Json | null
@@ -1051,6 +1056,7 @@ export type Database = {
           published_at?: string | null
           review_count?: number | null
           review_rating?: number | null
+          review_video_url?: string | null
           shopify_id?: string | null
           status?: string | null
           synced_at?: string | null
@@ -1063,9 +1069,11 @@ export type Database = {
           vendor?: string | null
         }
         Update: {
+          additional_videos?: Json | null
           all_images?: Json | null
           compare_at_price?: number | null
           created_at?: string | null
+          demo_video_url?: string | null
           description?: string | null
           handle?: string | null
           images?: Json | null
@@ -1079,6 +1087,7 @@ export type Database = {
           published_at?: string | null
           review_count?: number | null
           review_rating?: number | null
+          review_video_url?: string | null
           shopify_id?: string | null
           status?: string | null
           synced_at?: string | null
