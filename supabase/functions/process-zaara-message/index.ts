@@ -1548,46 +1548,90 @@ User query: ${message}`
                 console.log(`ℹ️ No FAQ videos found for this product`);
               }
               
-              // Extract video URLs from metafields - check ALL possible field names
-              const metafields = product.metafields || {};
-              let productVideoUrls: string[] = [];
+        // Extract video URLs from metafields - check ALL possible field names
+        const metafields = product.metafields || {};
+        let productVideoUrls: string[] = [];
+
+        // FIXED: Added ALL video field names including "Product DVC" (main multi-video field)
+        const videoFieldNames = [
+          // Primary multi-video field (MOST IMPORTANT!)
+          'Product DVC',                      // Shopify display name for main video array
+          'product_dvc',                      // Database storage name
+          'custom.product_dvc',               // With custom namespace
+          
+          // Individual video fields
+          'Product Review Video',             // Shopify field
+          'Assembly or Unboxing Video',       // Shopify field
+          'product_demo_video',               // Database field
+          'custom.product_demo_video',        // With custom namespace
+          
+          // Legacy/fallback
+          'product_video'                     // Keep for safety
+        ];
+
+        console.log(`📹 Checking metafields for video URLs...`);
+        
+        // Check if metafields is an object (direct properties)
+        if (metafields && typeof metafields === 'object' && !Array.isArray(metafields)) {
+          for (const fieldName of videoFieldNames) {
+            if (metafields[fieldName]) {
+              const value = metafields[fieldName];
               
-              // Possible metafield names for videos
-              const videoFieldNames = [
-                'product_video',
-                'Product Review Video',
-                'Assembly or Unboxing Video',
-                'product_demo_video',
-                'custom.product_demo_video'
-              ];
-              
-              console.log(`📹 Checking metafields for video URLs...`);
-              
-              // Check if metafields is an object (direct properties)
-              if (metafields && typeof metafields === 'object' && !Array.isArray(metafields)) {
-                for (const fieldName of videoFieldNames) {
-                  if (metafields[fieldName]) {
-                    productVideoUrls.push(metafields[fieldName]);
-                    console.log(`📹 Found video in metafield "${fieldName}": ${metafields[fieldName]}`);
+              // FIXED: Check if value is a JSON array string like "[\"url1\",\"url2\"]"
+              if (typeof value === 'string' && value.trim().startsWith('[')) {
+                try {
+                  const parsedArray = JSON.parse(value);
+                  if (Array.isArray(parsedArray)) {
+                    productVideoUrls.push(...parsedArray);
+                    console.log(`📹 Parsed ${parsedArray.length} videos from "${fieldName}"`);
+                    continue;
                   }
+                } catch (e) {
+                  console.error(`❌ Failed to parse JSON array from "${fieldName}":`, e);
                 }
               }
               
-              // Check if metafields is an array
-              if (Array.isArray(metafields) && metafields.length > 0) {
-                for (const meta of metafields) {
-                  // Check various field name patterns
-                  if (meta.key && videoFieldNames.some(name => 
-                    name.toLowerCase().includes(meta.key.toLowerCase()) || 
-                    meta.key.toLowerCase().includes('video')
-                  )) {
-                    if (meta.value) {
-                      productVideoUrls.push(meta.value);
-                      console.log(`📹 Found video in array metafield "${meta.namespace}.${meta.key}": ${meta.value}`);
+              // Single URL (not an array)
+              productVideoUrls.push(value);
+              console.log(`📹 Found single video in "${fieldName}": ${value}`);
+            }
+          }
+        }
+        
+        // Check if metafields is an array (alternative structure)
+        if (Array.isArray(metafields) && metafields.length > 0) {
+          for (const meta of metafields) {
+            if (meta.key && videoFieldNames.some(name => 
+              name.toLowerCase().includes(meta.key.toLowerCase()) || 
+              meta.key.toLowerCase().includes('video')
+            )) {
+              if (meta.value) {
+                const value = meta.value;
+                
+                if (typeof value === 'string' && value.trim().startsWith('[')) {
+                  try {
+                    const parsedArray = JSON.parse(value);
+                    if (Array.isArray(parsedArray)) {
+                      productVideoUrls.push(...parsedArray);
+                      console.log(`📹 Parsed ${parsedArray.length} videos from array metafield`);
+                      continue;
                     }
+                  } catch (e) {
+                    console.error(`❌ Failed to parse array metafield:`, e);
                   }
                 }
+                
+                productVideoUrls.push(value);
               }
+            }
+          }
+        }
+        
+        // FIXED: Remove duplicates and filter out invalid URLs
+        productVideoUrls = [...new Set(productVideoUrls)].filter(url => 
+          url && typeof url === 'string' && url.trim().length > 0
+        );
+        console.log(`✅ Total unique valid video URLs found: ${productVideoUrls.length}`);
               
               // Remove duplicates
               productVideoUrls = [...new Set(productVideoUrls)];
