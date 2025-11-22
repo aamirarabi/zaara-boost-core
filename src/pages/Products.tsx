@@ -10,6 +10,7 @@ import { Search, RefreshCw, Loader2, Package, CheckCircle, XCircle, AlertTriangl
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatPKRCurrency } from "@/lib/utils";
+import { ProductAnalyticsButton } from "@/components/dashboard/ProductAnalyticsButton";
 
 const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -295,6 +296,19 @@ const Products = () => {
                   <p className="text-sm text-muted-foreground mb-3">
                     {product.product_type} • {product.vendor}
                   </p>
+
+                  {/* Analytics Button */}
+                  <div className="mb-3">
+                    <ProductAnalyticsButton
+                      productId={product.product_id}
+                      productTitle={product.title}
+                      totalViews={product.total_views || 0}
+                      totalSales={product.total_sales || 0}
+                      reviewRating={avgRating ? parseFloat(avgRating) : 0}
+                      reviewCount={reviewCount}
+                      inventory={product.inventory || 0}
+                    />
+                  </div>
 
                   {/* Detailed Metadata Section */}
                   <Collapsible open={isExpanded} onOpenChange={() => setExpandedProduct(isExpanded ? null : product.product_id)}>
